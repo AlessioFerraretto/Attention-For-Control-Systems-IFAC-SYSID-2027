@@ -4,3 +4,63 @@ seed: null
 
 epochs: 50
 learning_rate: 1e-3
+
+training_batch_size: 512
+validation_batch_size: 8192
+test_batch_size: 8192
+
+model:
+  description: Transformer
+
+  layer_name: transformer # Name of the layer used
+  embedding: continuous-signal-projection # Embedding type
+  out_layer: mean-pooled-classifier # Output layer type
+  num_layers: 1
+
+  # Layer parameters
+  input_dim: 1
+  model_dim: 64
+  num_heads: 4
+  output_dim: 1
+  activation_function: gelu
+  dropout: 0.1
+
+  # Only for out_layer = mlp-classifier
+  input_dim_classifier: 1024 #32*32 # Input dimension of the classifier
+  hidden_dim_classifier: 32 # Hidden dimension of the classifier
+  output_dim_classifier: 10 # Output dimension of the classifier
+  out_bias1_classifier: True # Biases of classifier hidden layer and out layer
+  out_bias2_classifier: True # Biases of classifier hidden layer and out layer
+
+  # Only for out_layer = mean-pooled-classifier
+  head_bias: True # Biases of the head layer
+  eps: 1e-6 # Epsilon for numerical stability in the head layer
+
+dataset:
+  name: induction-head
+  description: TODO
+
+  shuffle: False # The sequences are already generated randomly
+
+  batch_size: 512
+  batches_per_epoch: 1000
+
+  g_length: 100
+  n_past: 50
+  n_future: 50
+  c_min: 0.1
+  c_max: 1.0
+  alpha_min: 0.1
+  alpha_max: 1.0
+  snr_min: 10.0
+  snr_max: 30.0
+  jitter_regularization_parameter: 0.01
+
+  output_dim: 10 # Only for out_layer = mean-pooled-classifier
+
+wandb:
+  enable: False
+  project: AttentionForControlSystems
+  entity: alessio-ferraretto-
+  dataset: synthetic-stable-spline
+  model_name: "ransformer"

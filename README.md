@@ -2,9 +2,8 @@
 
 source $HOME/miniconda3/bin/activate
 
-# Only the first time
+# Only the first time conda create --name attention-for-control-systems python=3.10
 
-conda create --name attention-for-control-systems python=3.10
 conda activate attention-for-control-systems
 
 # 2. Install your project

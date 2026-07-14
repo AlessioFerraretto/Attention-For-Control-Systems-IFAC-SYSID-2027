@@ -6,25 +6,46 @@ from utils.StableSplineGenerator import generate_stable_spline
 
 
 class InductionHead(Dataset):
-    def __init__(self, num_samples, seq_len, m):
+    def __init__(self, cfg):
         """Generates a static dataset of synthetic linear systems."""
-        self.inputs = []
-        self.targets = []
+        self.batch_size = cfg.dataset.batch_size
+        self.batches_per_epoch = cfg.dataset.batches_per_epoch
 
-        for _ in range(num_samples):
-            sample = generate_stable_spline(m=m, N=seq_len)
-            u = sample["u"]
-            y = sample["y"]
-            g = sample["g"]
-
-            # Stack u and y as features for the sequence: shape (seq_len, 2)
-            src = np.stack([u, y], axis=1)
-
-            self.inputs.append(torch.tensor(src, dtype=torch.float32))
-            self.targets.append(torch.tensor(g, dtype=torch.float32))
+        self.g_length = cfg.dataset.g_length
+        self.n_past = cfg.dataset.n_past
+        self.n_future = cfg.dataset.n_future
+        self.c_min = cfg.dataset.c_min
+        self.c_max = cfg.dataset.c_max
+        self.alpha_min = cfg.dataset.alpha_min
+        self.alpha_max = cfg.dataset.alpha_max
+        self.snr_min = cfg.dataset.snr_min
+        self.snr_max = cfg.dataset.snr_max
+        self.jitter_regularization_parameter = (
+            cfg.dataset.jitter_regularization_parameter
+        )
 
     def __len__(self):
-        return len(self.inputs)
+        return self.batches_per_epoch * self.batch_size
 
     def __getitem__(self, idx):
-        return self.inputs[idx], self.targets[idx]
+        sample = generate_stable_spline(
+            g_length=self.g_length,
+            n_past=self.n_past,
+            n_future=self.n_future,
+            c_min=self.c_min,
+            c_max=self.c_max,
+            alpha_min=self.alpha_min,
+            alpha_max=self.alpha_max,
+            snr_min=self.snr_min,
+            snr_max=self.snr_max,
+            jitter_regularization_parameter=self.jitter_regularization_parameter,
+        )
+        u = np.concatenate([sample["u_past"], sample["u_future"]])
+        y = np.concatenate([sample["y_past"], sample["y_future"]])
+        g = sample["g"]
+
+        # Stack u and y as features for the sequence: shape (seq_len, 2)
+        input = torch.tensor(np.stack([u, y], axis=1), dtype=torch.float)
+        target = torch.tensor(g, dtype=torch.float)
+
+        return input, target
