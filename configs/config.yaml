@@ -1,0 +1,8 @@
+project_name: "Attention for Control Systems"
+
+num_workers: 4
+seed: null
+
+defaults:
+  - _self_
+  - experiment: stable_spline

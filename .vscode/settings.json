@@ -1,0 +1,33 @@
+{
+  // Prettier settings as global default for all file types
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "editor.formatOnSave": true,
+
+  // Python autoDocstring settings
+  "autoDocstring.docstringFormat": "google",
+  "autoDocstring.generateDocstringOnEnter": true,
+  "autoDocstring.includeExtendedSummary": true,
+
+  // Ruff settings for Python files
+  "[python]": {
+    "editor.defaultFormatter": "charliermarsh.ruff",
+    "editor.codeActionsOnSave": {
+      "source.fixAll": "explicit"
+    },
+    "editor.formatOnSave": true
+  },
+  "ruff.lint.select": [
+    "E", // Syntax errors - This rule will not be enforced by Ruff, but make sure to check for syntax errors in your code before committing.
+    "F", // Basic logical errors
+    "N", // Naming conventions - This rule will not be enforced by Ruff, but make sure to follow the naming conventions outlined in the STYLE.md file.
+    "W", // Basic style warnings
+    "I", // Automatic import sorting on save
+    "B", // Common bug prevention
+    "UP", // Modern syntax
+    "PD", // Pandas errors
+    "NPY", // NumPy best practices
+    "SIM" // Code simplification rules
+  ],
+  "python-envs.defaultEnvManager": "ms-python.python:system",
+  "python-envs.defaultPackageManager": "ms-python.python:pip"
+}
