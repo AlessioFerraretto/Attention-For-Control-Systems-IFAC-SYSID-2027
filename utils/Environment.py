@@ -28,7 +28,9 @@ def get_torch_device() -> torch.device:
         cuda_v = torch.version.cuda
         cudnn_v = torch.backends.cudnn.version()
         gpu_n = torch.cuda.device_count()
-        logger.info(f"Device: Using CUDA ({cuda_v}) | cudnn ({cudnn_v}) | GPUs: {gpu_n}")
+        logger.info(
+            f"Device: Using CUDA ({cuda_v}) | cudnn ({cudnn_v}) | GPUs: {gpu_n}"
+        )
         return torch.device("cuda")
 
     # TODO: Can it even run on MPS or CPU or should we raise error?

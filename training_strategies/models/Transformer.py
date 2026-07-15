@@ -13,6 +13,9 @@ class Transformer:
     def setup_for_eval(self, model):
         pass
 
+    def extra_loss(self, model, cfg, global_step):
+        return 0  # TODO: Check if this is correct
+
     def make_optimizer(self, model, cfg) -> Optimizer:
         return AdamW(model.parameters(), lr=cfg.learning_rate)
 
@@ -37,8 +40,6 @@ class Transformer:
         # Collect all available metrics coming from the model
         log_metrics = collect_metrics(model)
 
-        string_from_ssm, dict_from_ssm = self.ssm.logging_metrics(log_metrics)
+        # TODO: Check if this is correct
 
-        string_from_model = "" + string_from_ssm
-
-        return log_metrics | dict_from_ssm, string_from_model
+        return log_metrics

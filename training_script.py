@@ -24,7 +24,6 @@ from typing import Literal
 import hydra
 import torch
 from hydra.core.hydra_config import HydraConfig
-from monitor.WandDBLogger import WandDBLogger
 from omegaconf import DictConfig, OmegaConf
 from torch import nn
 from torch.optim import Optimizer
@@ -32,6 +31,7 @@ from torch.utils.data import DataLoader
 
 from datasets.Factory import get_data_loaders
 from models.Factory import construct_model
+from monitor.WandDBLogger import WandDBLogger
 from training_strategies.Factory import make_strategy
 from utils.Environment import get_job_id, get_torch_device
 
@@ -182,7 +182,9 @@ def training(
 
             if not (i - 1) % cfg.debug_every:
                 wandb_dict, string_to_print = strategy.logging_metrics(model)
-                log.info(f"i: {i: 6d} | Loss: {loss.item():.6f}" + string_to_print)
+                log.info(
+                    f"i: {i: 6d} | Loss: {loss.item():.6f}"
+                )  # TODO: Check if it is correct: I removed "+ string_top_print"
                 wandb_logger.log({"loss": loss.item()})
                 wandb_logger.log(wandb_dict)
 
@@ -366,7 +368,9 @@ def test(
     model_acc.load_state_dict(best_acc["model_state_dict"])
     model_loss.load_state_dict(best_loss["model_state_dict"])
 
-    loss_function = torch.nn.CrossEntropyLoss()
+    # TODO: why is the loss function here instead of reading the one from the strategy?
+    # loss_function = torch.nn.CrossEntropyLoss()
+    loss_function = torch.nn.MSELoss()  # TODO: Check if this is correct
 
     strategy_acc = make_strategy(cfg)
     strategy_acc.setup_for_eval(model_acc)

@@ -48,10 +48,10 @@ class MeanPooledClassifier(TrackableModule):
         # Mean pooling over sequence dimension
         u = torch.mean(u, 1)
 
-        # Classification logits
+        # Regression logits
         logits = self.head(u)
 
-        # Predicted class indices
-        predictions = torch.argmax(logits, dim=-1)
+        # Predicted values
+        predictions = logits  # TODO: Check if this is correct
 
         return predictions, logits

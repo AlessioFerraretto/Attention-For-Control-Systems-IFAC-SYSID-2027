@@ -47,6 +47,7 @@ The project uses Hydra for configuration management. The top-level `configs/conf
 
 - `num_workers`,
 - `seed`,
+- `debug_every`,
 - dataset and model defaults.
 
 Per-experiment configuration files live in `configs/experiment/` and select dataset/model variants through Hydra defaults.

@@ -3,18 +3,12 @@ import torch.nn as nn
 
 
 class Transformer(nn.Module):
-    """A compact transformer block for sequence-to-sequence prediction.
-
-    The implementation accepts two calling conventions so it can be used both by
-    the configuration-based model factory and by the older training scripts.
-    When a configuration object is provided, it reads the relevant settings from
-    ``cfg.model``. Otherwise it uses the explicit keyword arguments.
-    """
+    """A compact transformer block for sequence-to-sequence prediction."""
 
     def __init__(
         self,
-        cfg=None,
-        device=None,
+        cfg,
+        device,
     ):
         super().__init__()
         self.device = device
@@ -34,15 +28,28 @@ class Transformer(nn.Module):
         self.input_proj = nn.Linear(
             self.input_dim, self.model_dim, device=device, dtype=torch.float
         )
-        self.positional_encoding = nn.Parameter(torch.zeros(1, 1, self.model_dim))
+
+        self.positional_encoding = nn.Parameter(
+            torch.zeros(1, 1, self.model_dim, device=self.device)
+        )
         self.blocks = nn.ModuleList(
             [self._build_block() for _ in range(self.num_layers)]
         )
-        self.norm = nn.LayerNorm(self.model_dim)
+        self.norm = nn.LayerNorm(self.model_dim, device=self.device, dtype=torch.float)
         self.readout = nn.Sequential(
-            nn.Linear(self.model_dim, max(16, self.model_dim // 2)),
+            nn.Linear(
+                self.model_dim,
+                max(16, self.model_dim // 2),
+                device=self.device,
+                dtype=torch.float,
+            ),
             self._activation(self.activation_function),
-            nn.Linear(max(16, self.model_dim // 2), self.output_dim),
+            nn.Linear(
+                max(16, self.model_dim // 2),
+                self.output_dim,
+                device=self.device,
+                dtype=torch.float,
+            ),
         )
 
     def _build_block(self):
@@ -115,9 +122,9 @@ class Transformer(nn.Module):
                 "Expected input of shape (batch, seq_len, features); "
                 f"got {tuple(x.shape)}"
             )
-
         projected = self.input_proj(x)
-        positions = self._positional_embeddings(projected) + self.positional_encoding
+        positional_encoding = self.positional_encoding.to(device=projected.device)
+        positions = self._positional_embeddings(projected) + positional_encoding
         hidden = projected + positions
 
         for block in self.blocks:

@@ -2,7 +2,20 @@ project_name: "Attention for Control Systems"
 
 num_workers: 4
 seed: null
+debug_every: 10
 
 defaults:
   - _self_
   - experiment: stable_spline
+
+hydra:
+  run:
+    # Override Hydra's working directory. `slurm_job_id` is a custom OmegaConf
+    # resolver to provide the JOB id.
+    dir: ./outputs/${dataset.out_dir_name}/${model.out_dir_name}/${slurm_job_id:}/
+
+  job_logging:
+    handlers:
+      file:
+        # Rewrite log file, instead of appending
+        mode: w

@@ -42,4 +42,5 @@ def collect_metrics(model):
                     metrics[f"{name}.{pname}_grad_norm"] = param.grad.data.norm(
                         2
                     ).item()
+
     return metrics

@@ -5,6 +5,7 @@ import logging
 import torch
 from torch import nn
 
+from models.embeddings.ContinuousSignalProjection import ContinuousSignalProjection
 from models.output_layers.MeanPooledClassifier import MeanPooledClassifier
 from models.output_layers.MLPClassifier import MLPClassifier
 from models.Transformer import Transformer
@@ -58,8 +59,7 @@ def _get_embedding(cfg, device: torch.device) -> nn.Embedding:
     # TODO padding index
 
     if cfg.model.embedding == "continuous-signal-projection":
-        # TODO Create embedding
-        pass
+        return ContinuousSignalProjection()
     else:
         raise NotImplementedError(
             f"Embedding '{cfg.model.embedding}' not implemented yet."
@@ -124,7 +124,7 @@ def _get_output_module(cfg, device: torch.device) -> nn.Module:
 
     if cfg.model.out_layer == "mean-pooled-classifier":
         return MeanPooledClassifier(
-            cfg.dataset.output_dim,
+            cfg.model.output_dim,  # TODO: Check if this is correct
             cfg.model.model_dim,
             cfg.model.head_bias,
             cfg.model.eps,
