@@ -5,7 +5,7 @@ from torch.utils.data import Dataset
 from utils.StableSplineGenerator import generate_stable_spline
 
 
-class InductionHead(Dataset):
+class StableSpline(Dataset):
     def __init__(self, cfg, batch_size):
         """Generates a static dataset of synthetic linear systems."""
         self.batch_size = batch_size  # TODO: Find a more elegant way

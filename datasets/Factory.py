@@ -10,7 +10,7 @@ import logging
 
 from torch.utils.data import DataLoader
 
-from datasets.InductionHead import InductionHead
+from datasets.StableSpline import StableSpline
 
 logger = logging.getLogger(__name__)
 
@@ -37,13 +37,11 @@ def get_data_loaders(cfg) -> tuple[DataLoader, DataLoader, DataLoader]:
 
     logger.info(f"Retrieving '{cfg.dataset.name}'")
 
-    if cfg.dataset.name == "induction-head":
+    if cfg.dataset.name == "stable-spline-kernel":
         # TODO: Find a more elegant way
-        train_dataset = InductionHead(cfg=cfg, batch_size=cfg.training_batch_size)
-        validation_dataset = InductionHead(
-            cfg=cfg, batch_size=cfg.validation_batch_size
-        )
-        test_dataset = InductionHead(cfg=cfg, batch_size=cfg.test_batch_size)
+        train_dataset = StableSpline(cfg=cfg, batch_size=cfg.training_batch_size)
+        validation_dataset = StableSpline(cfg=cfg, batch_size=cfg.validation_batch_size)
+        test_dataset = StableSpline(cfg=cfg, batch_size=cfg.test_batch_size)
     else:
         raise NotImplementedError(
             f"Dataset '{cfg.dataset.name}' is not implemented yet."

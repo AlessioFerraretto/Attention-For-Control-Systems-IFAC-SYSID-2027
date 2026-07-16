@@ -1,8 +1,8 @@
 from training_strategies.models.Transformer import Transformer
-from training_strategies.task.InductionHead import InductionHead
+from training_strategies.task.StableSpline import StableSpline
 from training_strategies.TrainingStrategy import TrainingStrategy
 
-TASKS = {"induction-head": InductionHead}
+TASKS = {"stable-spline-kernel": StableSpline}
 # SSMS = {"transformer": Transformer}
 MODELS = {"transformer": Transformer}
 
