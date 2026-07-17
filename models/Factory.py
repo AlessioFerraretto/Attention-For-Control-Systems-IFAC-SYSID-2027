@@ -34,7 +34,14 @@ def construct_model(cfg, device: torch.device) -> nn.Module:
     """
     logger.info("Constructing model")
 
-    layers = [_build_layer(cfg=cfg, device=device) for _ in range(cfg.model.num_layers)]
+    layers = [
+        _build_layer(
+            cfg=cfg,
+            device=device,
+            input_dim=cfg.model.input_dim if idx == 0 else cfg.model.model_dim,
+        )
+        for idx in range(cfg.model.num_layers)
+    ]
 
     return NNComposition(
         embedding=_get_embedding(cfg=cfg, device=device),
@@ -66,7 +73,7 @@ def _get_embedding(cfg, device: torch.device) -> nn.Embedding:
         )
 
 
-def _build_layer(cfg, device: torch.device) -> nn.Module:
+def _build_layer(cfg, device: torch.device, input_dim: int) -> nn.Module:
     """Build a single instance of the model's inner layers.
 
     This is typically a Mamba block, but it can also be an isolated SSM module or
@@ -77,19 +84,22 @@ def _build_layer(cfg, device: torch.device) -> nn.Module:
             Configuration object containing model settings.
         device : torch.device
             Device on which the layer should be created.
+        input_dim : int | None
+            Optional input dimension override for the current layer.
 
     Returns:
         nn.Module: A single layer instance matching the configured layer type.
     """
+
     if cfg.model.layer_name == "transformer":
-        return _select_transformer(cfg=cfg, device=device)
+        return _select_transformer(cfg=cfg, device=device, input_dim=input_dim)
     else:
         raise NotImplementedError(
             f"Layer '{cfg.model.layer_name}' not implemented yet."
         )
 
 
-def _select_transformer(cfg, device: torch.device) -> nn.Module:
+def _select_transformer(cfg, device: torch.device, input_dim: int) -> nn.Module:
     """Select the appropriate transformer layer based on the configuration.
 
     Parameters:
@@ -97,12 +107,15 @@ def _select_transformer(cfg, device: torch.device) -> nn.Module:
             Configuration object containing model settings.
         device : torch.device
             Device on which the transformer layer should be created.
+        input_dim : int | None
+            Optional input dimension override for the current layer.
 
     Returns:
         nn.Module: The selected transformer layer instance.
     """
+
     if cfg.model.layer_name == "transformer":
-        return Transformer(cfg=cfg, device=device)
+        return Transformer(cfg=cfg, device=device, input_dim=input_dim)
     else:
         raise NotImplementedError(
             f"Transformer layer '{cfg.model.layer_name}' not implemented yet."

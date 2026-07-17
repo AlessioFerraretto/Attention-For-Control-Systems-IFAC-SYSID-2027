@@ -5,14 +5,11 @@ import torch.nn as nn
 class Transformer(nn.Module):
     """A compact transformer block for sequence-to-sequence prediction."""
 
-    def __init__(
-        self,
-        cfg,
-        device,
-    ):
+    def __init__(self, cfg, device, input_dim: int):
         super().__init__()
+
         self.device = device
-        self.input_dim = cfg.model.input_dim
+        self.input_dim = input_dim
         self.model_dim = cfg.model.model_dim
         self.num_heads = cfg.model.num_heads
         self.num_layers = cfg.model.num_layers
