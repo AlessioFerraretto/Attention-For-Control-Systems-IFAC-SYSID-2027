@@ -3,7 +3,7 @@ from collections.abc import Callable
 import torch
 
 
-class InductionHead:
+class StableSpline:
     def loss_fn(self) -> Callable:
         # return torch.nn.CrossEntropyLoss()
         return torch.nn.MSELoss()  # TODO: Check if this is correct
