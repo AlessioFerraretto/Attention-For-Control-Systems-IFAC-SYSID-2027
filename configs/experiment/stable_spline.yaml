@@ -60,8 +60,8 @@ dataset:
   out_dir_name: "stable-spline-kernel"
 
 wandb:
-  enable: False
+  enable: True
   project: AttentionForControlSystems
-  entity: alessio-ferraretto-
+  entity: alessioferraretto-unipd
   dataset: stable-spline-kernel
   model_name: "transformer"
