@@ -12,10 +12,10 @@ import torch
 import torch.nn.functional as F
 
 
-def generate_stable_spline_kernel(impulse_length, c, alpha, device):
+def generate_stable_spline_kernel(impulse_length, c, alpha):
     """Generate a first-order stable spline covariance matrix using PyTorch."""
     # Create 1-based indices: [1, 2, ..., impulse_length] directly on the GPU/CPU
-    idx = torch.arange(1, impulse_length + 1, device=device)
+    idx = torch.arange(1, impulse_length + 1)
 
     # Broadcasting:
     # idx[:, None] is an (N, 1) column vector
@@ -23,11 +23,11 @@ def generate_stable_spline_kernel(impulse_length, c, alpha, device):
     # torch.maximum broadcasts them into an (N, N) matrix of max(i, j)
     max_indices = torch.maximum(idx[:, None], idx)
 
-    # Compute the entire kernel directly on the device
+    # Compute the entire kernel
     return c * (alpha**max_indices)
 
 
-def generate_stable_spline_kernel_old(impulse_length, c, alpha, device):
+def generate_stable_spline_kernel_old(impulse_length, c, alpha):
     """Generate a first-order stable spline covariance matrix.
 
     The covariance matrix follows the TC kernel formulation with entries
@@ -65,7 +65,6 @@ def generate_stable_spline_old(
     snr_min,
     snr_max,
     jitter_regularization_parameter,
-    device,
 ):
     """Generate a synthetic system identification problem.
 
@@ -116,8 +115,8 @@ def generate_stable_spline_old(
     )
     alpha = np.random.uniform(alpha_min, alpha_max)  # Higher alpha = slower decay
 
-    # Generate the Kernel K_eta on the requested device.
-    K_eta = generate_stable_spline_kernel_old(g_length, c, alpha, device)
+    # Generate the Kernel K_eta
+    K_eta = generate_stable_spline_kernel_old(g_length, c, alpha)
 
     # 2. Sample an impulse response g ~ N(0, K_eta)
     # Add a tiny jitter to the diagonal for numerical stability (Cholesky decomposition)
@@ -171,7 +170,6 @@ def generate_stable_spline(
     snr_min,
     snr_max,
     jitter_regularization_parameter,
-    device,
 ):
     """Generate a synthetic system identification problem.
 
@@ -222,21 +220,21 @@ def generate_stable_spline(
         1
     ).item() + alpha_min  # Higher alpha = slower decay
 
-    # Generate the Kernel K_eta on the requested device.
-    K_eta = generate_stable_spline_kernel(g_length, c, alpha, device)
+    # Generate the Kernel K_eta.
+    K_eta = generate_stable_spline_kernel(g_length, c, alpha)
 
     # 2. Sample an impulse response g ~ N(0, K_eta)
     # Add a tiny jitter to the diagonal for numerical stability (Cholesky decomposition)
-    jitter = torch.eye(g_length, device=device) * jitter_regularization_parameter
+    jitter = torch.eye(g_length) * jitter_regularization_parameter
 
     # Create a Multivariate Normal distribution directly on the GPU/CPU and sample
     mvn = torch.distributions.MultivariateNormal(
-        loc=torch.zeros(g_length, device=device), covariance_matrix=K_eta + jitter
+        loc=torch.zeros(g_length), covariance_matrix=K_eta + jitter
     )
     g = mvn.sample()
 
     # 3. Generate input sequence u_t (e.g., white Gaussian noise)
-    u = torch.randn(n, device=device)
+    u = torch.randn(n)
 
     # 4. Compute noise-free output y^0 using convolution
     # To mimic scipy.signal.convolve(..., mode="full") in PyTorch:
@@ -258,7 +256,7 @@ def generate_stable_spline(
 
     # PyTorch var unbiased=False matches numpy's default np.var behavior (ddof=0)
     noise_variance = torch.var(y0, unbiased=False) / snr_linear
-    e = torch.randn(n, device=device) * torch.sqrt(noise_variance)
+    e = torch.randn(n) * torch.sqrt(noise_variance)
 
     y = y0 + e
 

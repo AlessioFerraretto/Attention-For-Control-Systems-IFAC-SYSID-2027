@@ -17,7 +17,7 @@ from datasets.StableSpline import StableSpline
 logger = logging.getLogger(__name__)
 
 
-def get_data_loaders(cfg, device) -> tuple[DataLoader, DataLoader, DataLoader]:
+def get_data_loaders(cfg) -> tuple[DataLoader, DataLoader, DataLoader]:
     """Return training, validation, and testing data loaders based on configuration.
 
     This function loads the specified dataset defined in the configuration object
@@ -42,23 +42,26 @@ def get_data_loaders(cfg, device) -> tuple[DataLoader, DataLoader, DataLoader]:
     if cfg.dataset.name == "stable-spline-kernel":
         # TODO: Find a more elegant way
         train_dataset = StableSpline(
-            cfg=cfg, batch_size=cfg.training_batch_size, device=device
+            cfg=cfg,
+            batch_size=cfg.training_batch_size,
         )
-        validation_dataset = StableSpline(
-            cfg=cfg, batch_size=cfg.validation_batch_size, device=device
-        )
+        validation_dataset = StableSpline(cfg=cfg, batch_size=cfg.validation_batch_size)
         test_dataset = StableSpline(
-            cfg=cfg, batch_size=cfg.test_batch_size, device=device
+            cfg=cfg,
+            batch_size=cfg.test_batch_size,
         )
     elif cfg.dataset.name == "future-prediction":
         train_dataset = FuturePrediction(
-            cfg=cfg, batch_size=cfg.training_batch_size, device=device
+            cfg=cfg,
+            batch_size=cfg.training_batch_size,
         )
         validation_dataset = FuturePrediction(
-            cfg=cfg, batch_size=cfg.validation_batch_size, device=device
+            cfg=cfg,
+            batch_size=cfg.validation_batch_size,
         )
         test_dataset = FuturePrediction(
-            cfg=cfg, batch_size=cfg.test_batch_size, device=device
+            cfg=cfg,
+            batch_size=cfg.test_batch_size,
         )
     else:
         raise NotImplementedError(

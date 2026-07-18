@@ -2,12 +2,12 @@
 
 seed: null
 
-epochs: 2
+epochs: 5
 learning_rate: 1e-3
 
-training_batch_size: 64
-validation_batch_size: 32
-test_batch_size: 32
+training_batch_size: 1024
+validation_batch_size: 1024
+test_batch_size: 1024
 
 model:
   description: a transformer architecture
@@ -19,14 +19,14 @@ model:
 
   # Layer parameters
   input_dim: 1
-  model_dim: 8
+  model_dim: 64
   num_heads: 1
-  output_dim: 8
+  output_dim: 64
   activation_function: gelu
   dropout: 0.1
 
   # Only for out_layer = mlp-classifier
-  input_dim_classifier: 200 # Input dimension of the classifier = L n_future output_dim = 25 * 8
+  input_dim_classifier: 1600 # Input dimension of the classifier = n_future * output_dim = 25 * 64
   hidden_dim_classifier: 100 # Hidden dimension of the classifier = input_dim_classifier/2
   output_dim_classifier: 25 # Output dimension of the classifier = n_future
   out_bias1_classifier: True # Biases of classifier hidden layer and out layer

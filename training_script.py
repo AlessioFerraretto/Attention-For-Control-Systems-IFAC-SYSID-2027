@@ -67,7 +67,7 @@ def main(cfg: DictConfig):
         log.info(f"Fixing PRNG seed: {cfg.seed}")
         torch.manual_seed(seed=cfg.seed)
 
-    train_loader, val_loader, test_loader = get_data_loaders(cfg=cfg, device=device)
+    train_loader, val_loader, test_loader = get_data_loaders(cfg=cfg)
 
     training(
         cfg=cfg,

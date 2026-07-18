@@ -5,11 +5,10 @@ from utils.StableSplineGenerator import generate_stable_spline
 
 
 class StableSpline(Dataset):
-    def __init__(self, cfg, batch_size, device):
+    def __init__(self, cfg, batch_size):
         """Generates a static dataset of synthetic linear systems."""
         self.batch_size = batch_size  # TODO: Find a more elegant way
         self.batches_per_epoch = cfg.dataset.batches_per_epoch
-        self.device = device
 
         self.g_length = cfg.dataset.g_length
         self.n_past = cfg.dataset.n_past
@@ -39,7 +38,6 @@ class StableSpline(Dataset):
             snr_min=self.snr_min,
             snr_max=self.snr_max,
             jitter_regularization_parameter=self.jitter_regularization_parameter,
-            device=self.device,
         )
         u = torch.cat([sample["u_past"], sample["u_future"]])
         y = torch.cat([sample["y_past"], sample["y_future"]])
