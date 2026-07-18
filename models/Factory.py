@@ -8,6 +8,9 @@ from torch import nn
 from models.embeddings.ContinuousSignalProjection import ContinuousSignalProjection
 from models.output_layers.MeanPooledClassifier import MeanPooledClassifier
 from models.output_layers.MLPClassifier import MLPClassifier
+from models.output_layers.MLPClassifierForFuturePrediction import (
+    MLPClassifierForFuturePrediction,
+)
 from models.Transformer import Transformer
 
 try:
@@ -150,6 +153,11 @@ def _get_output_module(cfg, device: torch.device) -> nn.Module:
             cfg.model.output_dim_classifier,
             cfg.model.out_bias1_classifier,
             cfg.model.out_bias2_classifier,
+            device=device,
+        )
+    elif cfg.model.out_layer == "mlp-classifier-for-future-prediction":
+        return MLPClassifierForFuturePrediction(
+            cfg=cfg,
             device=device,
         )
     else:

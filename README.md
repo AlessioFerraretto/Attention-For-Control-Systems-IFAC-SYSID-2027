@@ -15,7 +15,7 @@ pip install -r requirements.txt
 
 ## 3. Run your local scripts
 
-python -m training_script experiment=stable_spline
+python -m training_script experiment=future-prediction
 
 # UV + VENV
 
@@ -56,5 +56,5 @@ uv sync
 ## 3. Run experiments
 
 ```bash
-python -m training_script experiment=stable_spline
+python -m training_script experiment=future-prediction
 ```

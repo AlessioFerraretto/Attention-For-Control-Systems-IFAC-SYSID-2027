@@ -2,13 +2,9 @@ from typing import Protocol
 
 from torch.optim import Optimizer
 
-from training_strategies.interfaces import SSMComponent
-
 
 class ModelComponent(Protocol):
-    """Setup, ottimizzatore, clipping, scheduling — possiede un SSMComponent."""
-
-    ssm: SSMComponent
+    """Setup, ottimizzatore, clipping, scheduling."""
 
     def setup(self, model, cfg, device, train_loader) -> None: ...
     def setup_for_eval(self, model) -> None: ...

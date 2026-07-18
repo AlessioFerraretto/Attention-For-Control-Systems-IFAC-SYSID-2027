@@ -31,6 +31,7 @@ class Transformer(TrackableModule):
         self.positional_encoding = nn.Parameter(
             torch.zeros(1, 1, self.model_dim, device=self.device)
         )
+
         self.blocks = nn.ModuleList(
             [self._build_block() for _ in range(self.num_layers)]
         )

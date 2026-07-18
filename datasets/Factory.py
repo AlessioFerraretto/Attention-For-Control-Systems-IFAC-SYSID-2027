@@ -8,14 +8,16 @@ splits for the train/validation partitions.
 
 import logging
 
+import torch
 from torch.utils.data import DataLoader
 
+from datasets.FuturePrediction import FuturePrediction
 from datasets.StableSpline import StableSpline
 
 logger = logging.getLogger(__name__)
 
 
-def get_data_loaders(cfg) -> tuple[DataLoader, DataLoader, DataLoader]:
+def get_data_loaders(cfg, device) -> tuple[DataLoader, DataLoader, DataLoader]:
     """Return training, validation, and testing data loaders based on configuration.
 
     This function loads the specified dataset defined in the configuration object
@@ -39,13 +41,31 @@ def get_data_loaders(cfg) -> tuple[DataLoader, DataLoader, DataLoader]:
 
     if cfg.dataset.name == "stable-spline-kernel":
         # TODO: Find a more elegant way
-        train_dataset = StableSpline(cfg=cfg, batch_size=cfg.training_batch_size)
-        validation_dataset = StableSpline(cfg=cfg, batch_size=cfg.validation_batch_size)
-        test_dataset = StableSpline(cfg=cfg, batch_size=cfg.test_batch_size)
+        train_dataset = StableSpline(
+            cfg=cfg, batch_size=cfg.training_batch_size, device=device
+        )
+        validation_dataset = StableSpline(
+            cfg=cfg, batch_size=cfg.validation_batch_size, device=device
+        )
+        test_dataset = StableSpline(
+            cfg=cfg, batch_size=cfg.test_batch_size, device=device
+        )
+    elif cfg.dataset.name == "future-prediction":
+        train_dataset = FuturePrediction(
+            cfg=cfg, batch_size=cfg.training_batch_size, device=device
+        )
+        validation_dataset = FuturePrediction(
+            cfg=cfg, batch_size=cfg.validation_batch_size, device=device
+        )
+        test_dataset = FuturePrediction(
+            cfg=cfg, batch_size=cfg.test_batch_size, device=device
+        )
     else:
         raise NotImplementedError(
             f"Dataset '{cfg.dataset.name}' is not implemented yet."
         )
+
+    mp_context = torch.multiprocessing.get_context("spawn")
 
     # Initialize PyTorch DataLoaders for all splits
     train_loader = DataLoader(
@@ -53,21 +73,24 @@ def get_data_loaders(cfg) -> tuple[DataLoader, DataLoader, DataLoader]:
         batch_size=cfg.training_batch_size,
         num_workers=cfg.num_workers,
         shuffle=cfg.dataset.shuffle,
-        pin_memory=True,
+        pin_memory=False,
+        multiprocessing_context=mp_context,
     )
     validation_loader = DataLoader(
         validation_dataset,
         batch_size=cfg.validation_batch_size,
         num_workers=cfg.num_workers,
         shuffle=cfg.dataset.shuffle,
-        pin_memory=True,
+        pin_memory=False,
+        multiprocessing_context=mp_context,
     )
     test_loader = DataLoader(
         test_dataset,
         batch_size=cfg.test_batch_size,
         num_workers=cfg.num_workers,
         shuffle=cfg.dataset.shuffle,
-        pin_memory=True,
+        pin_memory=False,
+        multiprocessing_context=mp_context,
     )
 
     return train_loader, validation_loader, test_loader
