@@ -1,8 +1,10 @@
 import torch
 import torch.nn as nn
 
+from monitor.TrackableModule import TrackableModule
 
-class Transformer(nn.Module):
+
+class Transformer(TrackableModule):
     """A compact transformer block for sequence-to-sequence prediction."""
 
     def __init__(self, cfg, device, input_dim: int):

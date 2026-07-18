@@ -42,4 +42,4 @@ class Transformer:
 
         # TODO: Check if this is correct
 
-        return log_metrics
+        return log_metrics, ""
