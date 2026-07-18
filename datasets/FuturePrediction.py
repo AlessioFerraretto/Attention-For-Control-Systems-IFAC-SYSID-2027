@@ -1,7 +1,10 @@
 import torch
 from torch.utils.data import Dataset
 
-from utils.StableSplineGenerator import generate_stable_spline
+from utils.StableSplineGenerator import (
+    sample_system_impulse_response,
+    simulate_io_data,
+)
 
 
 class FuturePrediction(Dataset):
@@ -25,22 +28,31 @@ class FuturePrediction(Dataset):
         self.padding = cfg.dataset.padding
         self.input_dim = cfg.model.input_dim
 
-    def __len__(self):
-        return self.batches_per_epoch * self.batch_size
-
-    def __getitem__(self, idx):
-        sample = generate_stable_spline(
+        self.fixed_g, self.system_params = sample_system_impulse_response(
             g_length=self.g_length,
-            n_past=self.n_past,
-            n_future=self.n_future,
             c_min=self.c_min,
             c_max=self.c_max,
             alpha_min=self.alpha_min,
             alpha_max=self.alpha_max,
-            snr_min=self.snr_min,
-            snr_max=self.snr_max,
             jitter_regularization_parameter=self.jitter_regularization_parameter,
         )
+
+    def __len__(self):
+        return self.batches_per_epoch * self.batch_size
+
+    def __getitem__(self, idx):
+        n_total = self.n_past + self.n_future
+
+        # Dynamically generate u and y using the fixed system
+        u, y, snr_db = simulate_io_data(
+            g=self.fixed_g, n=n_total, snr_min=self.snr_min, snr_max=self.snr_max
+        )
+
+        # Splitting manuale
+        u_past = u[: self.n_past]
+        y_past = y[: self.n_past]
+        u_future = u[self.n_past :]
+        y_future = y[self.n_past :]
 
         padding_tensor = torch.full(
             size=(self.n_future,),
@@ -51,15 +63,15 @@ class FuturePrediction(Dataset):
         # TODO: Ask Pillonetto: Why not only u_past -> y_past
         input = torch.cat(
             [
-                sample["u_past"],
-                sample["y_past"],
-                sample["u_future"],
+                u_past,
+                y_past,
+                u_future,
                 padding_tensor,
             ]
         )
         input = input.unsqueeze(-1)
 
-        target = sample["y_future"]
+        target = y_future
         target = target.unsqueeze(-1)
 
         return input, target

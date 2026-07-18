@@ -6,19 +6,17 @@ import torch
 from torch import nn
 
 from models.embeddings.ContinuousSignalProjection import ContinuousSignalProjection
+from models.embeddings.TransformerPositionalEncoding import (
+    TransformerPositionalEncoding,
+)
+from models.NNComposition import NNComposition
 from models.output_layers.MeanPooledClassifier import MeanPooledClassifier
 from models.output_layers.MLPClassifier import MLPClassifier
 from models.output_layers.MLPClassifierForFuturePrediction import (
     MLPClassifierForFuturePrediction,
 )
-from models.Transformer import Transformer
-
-try:
-    from mamba_ssm import Mamba as OriginalMamba
-except ImportError:
-    OriginalMamba = None
-
-from models.NNComposition import NNComposition
+from models.TransformerEncoderLayer import TransformerEncoderLayer
+from models.TransformerFinalLayer import TransformerFinalLayer
 
 logger = logging.getLogger(__name__)
 
@@ -39,9 +37,7 @@ def construct_model(cfg, device: torch.device) -> nn.Module:
 
     layers = [
         _build_layer(
-            cfg=cfg,
-            device=device,
-            input_dim=cfg.model.input_dim if idx == 0 else cfg.model.model_dim,
+            cfg=cfg, device=device, layer_index=idx, num_layers=cfg.model.num_layers
         )
         for idx in range(cfg.model.num_layers)
     ]
@@ -70,13 +66,17 @@ def _get_embedding(cfg, device: torch.device) -> nn.Embedding:
 
     if cfg.model.embedding == "continuous-signal-projection":
         return ContinuousSignalProjection()
+    elif cfg.model.embedding == "transformer-positional-encoding":
+        return TransformerPositionalEncoding(cfg, device=device)
     else:
         raise NotImplementedError(
             f"Embedding '{cfg.model.embedding}' not implemented yet."
         )
 
 
-def _build_layer(cfg, device: torch.device, input_dim: int) -> nn.Module:
+def _build_layer(
+    cfg, device: torch.device, layer_index: int, num_layers: int
+) -> nn.Module:
     """Build a single instance of the model's inner layers.
 
     This is typically a Mamba block, but it can also be an isolated SSM module or
@@ -94,34 +94,15 @@ def _build_layer(cfg, device: torch.device, input_dim: int) -> nn.Module:
         nn.Module: A single layer instance matching the configured layer type.
     """
 
-    if cfg.model.layer_name == "transformer":
-        return _select_transformer(cfg=cfg, device=device, input_dim=input_dim)
+    if cfg.model.layer_name == "transformer-encoder-layer":
+        if layer_index != num_layers - 1:
+            return TransformerEncoderLayer(cfg=cfg, device=device)
+        else:
+            return TransformerFinalLayer(cfg=cfg, device=device)
+
     else:
         raise NotImplementedError(
             f"Layer '{cfg.model.layer_name}' not implemented yet."
-        )
-
-
-def _select_transformer(cfg, device: torch.device, input_dim: int) -> nn.Module:
-    """Select the appropriate transformer layer based on the configuration.
-
-    Parameters:
-        cfg : Any
-            Configuration object containing model settings.
-        device : torch.device
-            Device on which the transformer layer should be created.
-        input_dim : int | None
-            Optional input dimension override for the current layer.
-
-    Returns:
-        nn.Module: The selected transformer layer instance.
-    """
-
-    if cfg.model.layer_name == "transformer":
-        return Transformer(cfg=cfg, device=device, input_dim=input_dim)
-    else:
-        raise NotImplementedError(
-            f"Transformer layer '{cfg.model.layer_name}' not implemented yet."
         )
 
 

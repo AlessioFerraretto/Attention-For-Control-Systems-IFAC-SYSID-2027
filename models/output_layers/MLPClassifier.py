@@ -33,7 +33,7 @@ class MLPClassifier(TrackableModule):
             nn.Linear(hidden_dim, output_dim, out_bias2, device=device),
         )
 
-    def forward(self, u, embedding: nn.Embedding):
+    def forward(self, u):
         """
         Parameters
             u: Input features [B, D]

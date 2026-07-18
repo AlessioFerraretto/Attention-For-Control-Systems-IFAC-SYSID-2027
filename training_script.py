@@ -353,14 +353,14 @@ def test(
 
     if acc_file:
         best_acc = torch.load(f=acc_file[0], weights_only=False)
-        log.info(f"Uploaded: {acc_file[0]}")
+        log.info(f"Saved: {acc_file[0]}")
     else:
         log.error("Best accuracy model not found")
         sys.exit(1)
 
     if loss_file:
         best_loss = torch.load(f=loss_file[0], weights_only=False)
-        log.info(f"Uploaded: {loss_file[0]}")
+        log.info(f"Saved: {loss_file[0]}")
     else:
         log.error("Best loss model not found")
         sys.exit(1)

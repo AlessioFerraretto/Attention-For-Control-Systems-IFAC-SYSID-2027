@@ -32,7 +32,7 @@ class MeanPooledClassifier(TrackableModule):
         # Linear classification head
         self.head = nn.Linear(d_model, output_dim, head_bias, device=device)
 
-    def forward(self, u, embedding: nn.Embedding):
+    def forward(self, u):
         """
         Parameters
             u: Input [B, L, D]

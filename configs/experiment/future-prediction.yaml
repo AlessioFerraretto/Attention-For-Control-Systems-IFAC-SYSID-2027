@@ -12,15 +12,16 @@ test_batch_size: 1024
 model:
   description: a transformer architecture
 
-  layer_name: transformer # Name of the layer used
-  embedding: continuous-signal-projection # Embedding type
+  model_name: transformer # Name of the layer used
+  embedding: transformer-positional-encoding # Embedding type
+  layer_name: transformer-encoder-layer # Name of the layer used
   out_layer: mlp-classifier-for-future-prediction # Output layer type
-  num_layers: 1
+  num_layers: 2
 
   # Layer parameters
   input_dim: 1
   model_dim: 64
-  num_heads: 1
+  num_heads: 4
   output_dim: 64
   activation_function: gelu
   dropout: 0.1
@@ -40,13 +41,13 @@ model:
 
 dataset:
   name: future-prediction
-  description: stable spline kernel generator
+  description: stable spline kernel generator of the type [u_past, y_past, u_future, padding]
 
   shuffle: False # The sequences are already generated randomly
 
   batches_per_epoch: 1000
 
-  g_length: 8
+  g_length: 2
   n_past: 25
   n_future: 25
   c_min: 0.1

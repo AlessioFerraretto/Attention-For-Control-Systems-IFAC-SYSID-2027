@@ -53,4 +53,4 @@ class NNComposition(TrackableModule):
             u = layer(u)
 
         # Pass the embedding layer instance, in case the output requires it
-        return self.output(u, self.embedding.Myembedding)
+        return self.output(u)
