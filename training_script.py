@@ -67,7 +67,7 @@ def main(cfg: DictConfig):
         log.info(f"Fixing PRNG seed: {cfg.seed}")
         torch.manual_seed(seed=cfg.seed)
 
-    train_loader, val_loader, test_loader = get_data_loaders(cfg=cfg)
+    train_loader, val_loader, test_loader = get_data_loaders(cfg=cfg, device=device)
 
     training(
         cfg=cfg,
@@ -164,7 +164,7 @@ def training(
             # based on the current global training step.
             strategy.before_step(model, global_step)
 
-            _, output = model(inputs)
+            output, _ = model(inputs)
 
             loss = loss_function(output, labels) + strategy.extra_loss(
                 model, cfg, global_step
@@ -304,7 +304,7 @@ def _evaluate(model, loader, loss_fn, device, strategy=None):
         for inputs, labels in loader:
             inputs, labels = inputs.to(device), labels.to(device)
             preds, logits = model(inputs)
-            total_loss += loss_fn(logits, labels).item() * inputs.size(0)
+            total_loss += loss_fn(preds, labels).item() * inputs.size(0)
             # correct += torch.sum(preds == labels).item()
             performance_metrics = strategy.compute_metrics(preds, labels)
             correct += performance_metrics["correct_sequences"]

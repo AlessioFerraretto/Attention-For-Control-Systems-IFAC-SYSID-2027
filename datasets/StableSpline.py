@@ -1,4 +1,3 @@
-import numpy as np
 import torch
 from torch.utils.data import Dataset
 
@@ -6,10 +5,11 @@ from utils.StableSplineGenerator import generate_stable_spline
 
 
 class StableSpline(Dataset):
-    def __init__(self, cfg, batch_size):
+    def __init__(self, cfg, batch_size, device):
         """Generates a static dataset of synthetic linear systems."""
         self.batch_size = batch_size  # TODO: Find a more elegant way
         self.batches_per_epoch = cfg.dataset.batches_per_epoch
+        self.device = device
 
         self.g_length = cfg.dataset.g_length
         self.n_past = cfg.dataset.n_past
@@ -39,13 +39,14 @@ class StableSpline(Dataset):
             snr_min=self.snr_min,
             snr_max=self.snr_max,
             jitter_regularization_parameter=self.jitter_regularization_parameter,
+            device=self.device,
         )
-        u = np.concatenate([sample["u_past"], sample["u_future"]])
-        y = np.concatenate([sample["y_past"], sample["y_future"]])
+        u = torch.cat([sample["u_past"], sample["u_future"]])
+        y = torch.cat([sample["y_past"], sample["y_future"]])
         g = sample["g"]
 
         # Stack u and y as features for the sequence: shape (seq_len, 2)
-        input = torch.tensor(np.stack([u, y], axis=1), dtype=torch.float)
-        target = torch.tensor(g, dtype=torch.float)
+        input = torch.stack([u, y], dim=1).float()
+        target = g.float()
 
         return input, target

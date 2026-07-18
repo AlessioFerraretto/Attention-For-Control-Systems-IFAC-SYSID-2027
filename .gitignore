@@ -182,3 +182,7 @@ cython_debug/
 
 # Outputs
 outputs/
+
+# Wandb key
+wandb_api_key.txt
+/wandb

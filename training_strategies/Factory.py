@@ -1,8 +1,8 @@
 from training_strategies.models.Transformer import Transformer
-from training_strategies.task.StableSpline import StableSpline
+from training_strategies.task.FuturePrediction import FuturePrediction
 from training_strategies.TrainingStrategy import TrainingStrategy
 
-TASKS = {"stable-spline-kernel": StableSpline}
+TASKS = {"future-prediction": FuturePrediction}
 # SSMS = {"transformer": Transformer}
 MODELS = {"transformer": Transformer}
 
