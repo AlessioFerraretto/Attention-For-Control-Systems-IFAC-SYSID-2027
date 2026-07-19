@@ -43,6 +43,8 @@ BestCriteria = Literal["acc", "loss"]
 # Register the `get_job_id` as a custom OmegaConf resolver. This allows the
 # output of the function to be accessed when building the Hydra configuration.
 OmegaConf.register_new_resolver(name="slurm_job_id", resolver=get_job_id)
+OmegaConf.register_new_resolver("mul", lambda x, y: int(x * y))
+OmegaConf.register_new_resolver("div", lambda x, y: int(x / y))
 
 
 @hydra.main(version_base=None, config_path="configs", config_name="config")

@@ -23,14 +23,14 @@ model:
   input_dim: 1
   model_dim: 64
   num_heads: 16
-  output_dim: 64
+  output_dim: ${model.model_dim}
   activation_function: gelu
   dropout: 0.1
 
   # Only for out_layer = mlp-classifier
-  input_dim_classifier: 3200 # Input dimension of the classifier = n * output_dim = 50 * 16
-  hidden_dim_classifier: 1600 # Hidden dimension of the classifier = input_dim_classifier/2
-  output_dim_classifier: 50 # Output dimension of the classifier = n
+  input_dim_classifier: "${mul: ${dataset.n_future}, ${model.output_dim} }" # Input dimension of the classifier = n_future * output_dim
+  hidden_dim_classifier: "${div: ${model.input_dim_classifier}, 2 }" # Hidden dimension of the classifier = input_dim_classifier/2
+  output_dim_classifier: ${dataset.n_future} # Output dimension of the classifier = n_future
   out_bias1_classifier: True # Biases of classifier hidden layer and out layer
   out_bias2_classifier: True # Biases of classifier hidden layer and out layer
 
@@ -50,6 +50,8 @@ dataset:
 
   g_length: 8
   n: 50
+  n_past: 0
+  n_future: "${dataset.n}"
   c_min: 0.1
   c_max: 1.0
   alpha_min: 0.1
