@@ -48,7 +48,7 @@ class FuturePrediction(Dataset):
             g=self.fixed_g, n=n_total, snr_min=self.snr_min, snr_max=self.snr_max
         )
 
-        # Splitting manuale
+        # Splitting
         u_past = u[: self.n_past]
         y_past = y[: self.n_past]
         u_future = u[self.n_past :]

@@ -6,7 +6,7 @@ debug_every: 10
 
 defaults:
   - _self_
-  - experiment: stable_spline
+  - experiment: future-prediction
 
 hydra:
   run:

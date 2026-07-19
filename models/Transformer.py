@@ -39,13 +39,13 @@ class Transformer(TrackableModule):
         self.readout = nn.Sequential(
             nn.Linear(
                 self.model_dim,
-                max(16, self.model_dim // 2),
+                self.model_dim,
                 device=self.device,
                 dtype=torch.float,
             ),
             self._activation(self.activation_function),
             nn.Linear(
-                max(16, self.model_dim // 2),
+                self.model_dim,
                 self.output_dim,
                 device=self.device,
                 dtype=torch.float,

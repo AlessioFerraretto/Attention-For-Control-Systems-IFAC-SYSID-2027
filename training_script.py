@@ -30,6 +30,7 @@ from torch.optim import Optimizer
 from torch.utils.data import DataLoader
 
 from datasets.Factory import get_data_loaders
+from evaluate import evaluate_model
 from models.Factory import construct_model
 from monitor.WandDBLogger import WandDBLogger
 from training_strategies.Factory import make_strategy
@@ -199,6 +200,27 @@ def training(
         log.info(
             f"Validation Loss: {val_loss:.5f}, Validation Accuracy: {val_accuracy:.3f}"
         )
+
+        # ------------------------VISUALIZATION PHASE-----------------------------------------
+        if epoch % cfg.eval_every == 0:
+            log.info(f"Running model evaluation at epoch {epoch}...")
+            try:
+                g = train_loader.dataset.fixed_g
+                n = cfg.dataset.n_past + cfg.dataset.n_future
+                evaluate_model(
+                    model=model,
+                    cfg=cfg,
+                    device=device,
+                    g=g,
+                    n=n,
+                    snr_min=cfg.dataset.snr_min,
+                    snr_max=cfg.dataset.snr_max,
+                    num_test_samples=3,
+                )
+            except Exception as e:
+                log.error(f"Evaluation failed: {e}")
+
+        # ------------------------VISUALIZATION PHASE-----------------------------------------
 
         # Save checkpoint
         model_path = (

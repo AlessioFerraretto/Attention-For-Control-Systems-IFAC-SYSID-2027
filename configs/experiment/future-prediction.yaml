@@ -4,10 +4,11 @@ seed: null
 
 epochs: 5
 learning_rate: 1e-3
+eval_every: 5
 
-training_batch_size: 1024
-validation_batch_size: 1024
-test_batch_size: 1024
+training_batch_size: 128
+validation_batch_size: 64
+test_batch_size: 64
 
 model:
   description: a transformer architecture
@@ -21,15 +22,15 @@ model:
   # Layer parameters
   input_dim: 1
   model_dim: 64
-  num_heads: 4
+  num_heads: 16
   output_dim: 64
   activation_function: gelu
   dropout: 0.1
 
   # Only for out_layer = mlp-classifier
-  input_dim_classifier: 1600 # Input dimension of the classifier = n_future * output_dim = 25 * 64
-  hidden_dim_classifier: 100 # Hidden dimension of the classifier = input_dim_classifier/2
-  output_dim_classifier: 25 # Output dimension of the classifier = n_future
+  input_dim_classifier: 3200 # Input dimension of the classifier = n_future * output_dim = 25 * 64
+  hidden_dim_classifier: 1600 # Hidden dimension of the classifier = input_dim_classifier/2
+  output_dim_classifier: 50 # Output dimension of the classifier = n_future
   out_bias1_classifier: True # Biases of classifier hidden layer and out layer
   out_bias2_classifier: True # Biases of classifier hidden layer and out layer
 
@@ -47,16 +48,16 @@ dataset:
 
   batches_per_epoch: 1000
 
-  g_length: 2
-  n_past: 25
-  n_future: 25
+  g_length: 8
+  n_past: 50
+  n_future: 50
   c_min: 0.1
   c_max: 1.0
   alpha_min: 0.1
   alpha_max: 1.0
-  snr_min: 1.0
-  snr_max: 3.0
-  jitter_regularization_parameter: 0.01
+  snr_min: 5
+  snr_max: 10
+  jitter_regularization_parameter: 0.00001
 
   padding: 0
 

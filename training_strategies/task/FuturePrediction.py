@@ -29,7 +29,7 @@ class FuturePrediction:
 
         distances = torch.abs(predictions - targets)
 
-        low_errors = torch.all(distances < 0.5, dim=1)
+        low_errors = torch.all(distances < 0.1, dim=1)
 
         total_score = torch.sum(low_errors).item()
 

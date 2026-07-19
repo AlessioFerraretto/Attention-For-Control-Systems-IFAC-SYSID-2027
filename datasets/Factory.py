@@ -12,6 +12,7 @@ import torch
 from torch.utils.data import DataLoader
 
 from datasets.FuturePrediction import FuturePrediction
+from datasets.FuturePredictionV2 import FuturePredictionV2
 from datasets.StableSpline import StableSpline
 
 logger = logging.getLogger(__name__)
@@ -60,6 +61,19 @@ def get_data_loaders(cfg) -> tuple[DataLoader, DataLoader, DataLoader]:
             batch_size=cfg.validation_batch_size,
         )
         test_dataset = FuturePrediction(
+            cfg=cfg,
+            batch_size=cfg.test_batch_size,
+        )
+    elif cfg.dataset.name == "future-prediction-v2":
+        train_dataset = FuturePredictionV2(
+            cfg=cfg,
+            batch_size=cfg.training_batch_size,
+        )
+        validation_dataset = FuturePredictionV2(
+            cfg=cfg,
+            batch_size=cfg.validation_batch_size,
+        )
+        test_dataset = FuturePredictionV2(
             cfg=cfg,
             batch_size=cfg.test_batch_size,
         )

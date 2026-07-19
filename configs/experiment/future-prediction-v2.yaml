@@ -1,0 +1,70 @@
+# @package _global_
+
+seed: null
+
+epochs: 5
+learning_rate: 1e-3
+eval_every: 5
+
+training_batch_size: 128
+validation_batch_size: 64
+test_batch_size: 64
+
+model:
+  description: a transformer architecture
+
+  model_name: transformer # Name of the layer used
+  embedding: transformer-positional-encoding # Embedding type
+  layer_name: transformer-encoder-layer # Name of the layer used
+  out_layer: mlp-classifier-for-future-prediction # Output layer type
+  num_layers: 2
+
+  # Layer parameters
+  input_dim: 1
+  model_dim: 64
+  num_heads: 16
+  output_dim: 64
+  activation_function: gelu
+  dropout: 0.1
+
+  # Only for out_layer = mlp-classifier
+  input_dim_classifier: 3200 # Input dimension of the classifier = n * output_dim = 50 * 16
+  hidden_dim_classifier: 1600 # Hidden dimension of the classifier = input_dim_classifier/2
+  output_dim_classifier: 50 # Output dimension of the classifier = n
+  out_bias1_classifier: True # Biases of classifier hidden layer and out layer
+  out_bias2_classifier: True # Biases of classifier hidden layer and out layer
+
+  # Only for out_layer = mean-pooled-classifier
+  head_bias: True # Biases of the head layer
+  eps: 1e-6 # Epsilon for numerical stability in the head layer
+
+  out_dir_name: "transformer"
+
+dataset:
+  name: future-prediction-v2
+  description: stable spline kernel generator of the type [u, padding]
+
+  shuffle: False # The sequences are already generated randomly
+
+  batches_per_epoch: 1000
+
+  g_length: 8
+  n: 50
+  c_min: 0.1
+  c_max: 1.0
+  alpha_min: 0.1
+  alpha_max: 1.0
+  snr_min: 5
+  snr_max: 10
+  jitter_regularization_parameter: 0.00001
+
+  padding: 0
+
+  out_dir_name: "future-prediction"
+
+wandb:
+  enable: True
+  project: AttentionForControlSystems
+  entity: alessioferraretto-unipd
+  dataset: future-prediction
+  model_name: "transformer"
