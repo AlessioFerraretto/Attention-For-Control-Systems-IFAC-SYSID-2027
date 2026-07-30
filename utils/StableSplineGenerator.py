@@ -18,10 +18,8 @@ def generate_stable_spline_kernel(impulse_length, c, alpha):
 
 def sample_system_impulse_response(
     g_length,
-    c_min,
-    c_max,
-    alpha_min,
-    alpha_max,
+    c,
+    alpha,
     jitter_regularization_parameter,
 ):
     """Sample the stable spline hyperparameters and impulse response 'g'.
@@ -29,9 +27,6 @@ def sample_system_impulse_response(
     Call this ONCE per system you want to identify (e.g., in Dataset __init__)
     to ensure the underlying physics of the system remain constant.
     """
-    c = (c_max - c_min) * torch.rand(1).item() + c_min
-    alpha = (alpha_max - alpha_min) * torch.rand(1).item() + alpha_min
-
     K_eta = generate_stable_spline_kernel(g_length, c, alpha)
     jitter = torch.eye(g_length) * jitter_regularization_parameter
 
@@ -77,10 +72,8 @@ def generate_stable_spline(
     g_length,
     n_past,
     n_future,
-    c_min,
-    c_max,
-    alpha_min,
-    alpha_max,
+    c,
+    alpha,
     snr_min,
     snr_max,
     jitter_regularization_parameter,
@@ -93,7 +86,10 @@ def generate_stable_spline(
 
     # 1. Sample the system physics
     g, system_params = sample_system_impulse_response(
-        g_length, c_min, c_max, alpha_min, alpha_max, jitter_regularization_parameter
+        g_length,
+        c=c,
+        alpha=alpha,
+        jitter_regularization_parameter=jitter_regularization_parameter,
     )
 
     # 2. Simulate a single trajectory of length n

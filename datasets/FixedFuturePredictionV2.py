@@ -1,3 +1,10 @@
+"""
+Uses a fixed system (alpha, c) given.
+Fixes (g) using the given system (alpha, c).
+Dynamically generates u and y given the fixed (g)
+The generator output is of the form [u, padding] -> [y].
+"""
+
 import torch
 from torch.utils.data import Dataset
 
@@ -7,18 +14,16 @@ from utils.StableSplineGenerator import (
 )
 
 
-class FuturePredictionV2(Dataset):
-    def __init__(self, cfg, batch_size):
+class FixedFuturePredictionV2(Dataset):
+    def __init__(self, cfg, batch_size, alpha, c):
         """Generates a static dataset of synthetic linear systems."""
         self.batch_size = batch_size  # TODO: Find a more elegant way
         self.batches_per_epoch = cfg.dataset.batches_per_epoch
 
         self.g_length = cfg.dataset.g_length
         self.n = cfg.dataset.n
-        self.c_min = cfg.dataset.c_min
-        self.c_max = cfg.dataset.c_max
-        self.alpha_min = cfg.dataset.alpha_min
-        self.alpha_max = cfg.dataset.alpha_max
+        self.c = c
+        self.alpha = alpha
         self.snr_min = cfg.dataset.snr_min
         self.snr_max = cfg.dataset.snr_max
         self.jitter_regularization_parameter = (
@@ -27,12 +32,11 @@ class FuturePredictionV2(Dataset):
         self.padding = cfg.dataset.padding
         self.input_dim = cfg.model.input_dim
 
+        # Fixes (g) using the given system (alpha, c)
         self.fixed_g, self.system_params = sample_system_impulse_response(
             g_length=self.g_length,
-            c_min=self.c_min,
-            c_max=self.c_max,
-            alpha_min=self.alpha_min,
-            alpha_max=self.alpha_max,
+            c=self.c,
+            alpha=self.alpha,
             jitter_regularization_parameter=self.jitter_regularization_parameter,
         )
 
@@ -51,7 +55,6 @@ class FuturePredictionV2(Dataset):
             dtype=torch.float,
         )
 
-        # TODO: Ask Pillonetto: Why not only u_past -> y_past
         input = torch.cat([u, padding_tensor])
         input = input.unsqueeze(-1)
 

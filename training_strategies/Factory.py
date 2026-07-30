@@ -1,11 +1,13 @@
 from training_strategies.models.Transformer import Transformer
 from training_strategies.task.FuturePrediction import FuturePrediction
-from training_strategies.task.FuturePredictionV2 import FuturePredictionV2
 from training_strategies.TrainingStrategy import TrainingStrategy
 
 TASKS = {
-    "future-prediction": FuturePrediction,
-    "future-prediction-v2": FuturePredictionV2,
+    "fixed-future-prediction-v1": FuturePrediction,
+    "fixed-future-prediction-v2": FuturePrediction,
+    "dynamic-future-prediction-v1": FuturePrediction,
+    "dynamic-future-prediction-v2": FuturePrediction,
+    "dynamic-future-prediction-v3": FuturePrediction,
 }
 MODELS = {"transformer": Transformer}
 

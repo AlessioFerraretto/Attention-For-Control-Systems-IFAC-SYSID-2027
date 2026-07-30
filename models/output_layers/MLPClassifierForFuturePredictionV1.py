@@ -13,7 +13,7 @@ from torch import nn
 from monitor.TrackableModule import TrackableModule
 
 
-class MLPClassifierForFuturePrediction(TrackableModule):
+class MLPClassifierForFuturePredictionV1(TrackableModule):
     """Build a feed-forward classifier for future prediction outputs.
 
     The classifier consumes a flattened window of past and future features and

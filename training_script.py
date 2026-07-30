@@ -207,16 +207,11 @@ def training(
         if epoch % cfg.eval_every == 0:
             log.info(f"Running model evaluation at epoch {epoch}...")
             try:
-                g = train_loader.dataset.fixed_g
-                n = cfg.dataset.n_past + cfg.dataset.n_future
                 evaluate_model(
                     model=model,
                     cfg=cfg,
+                    dataset=val_loader.dataset,
                     device=device,
-                    g=g,
-                    n=n,
-                    snr_min=cfg.dataset.snr_min,
-                    snr_max=cfg.dataset.snr_max,
                     num_test_samples=3,
                 )
             except Exception as e:

@@ -12,8 +12,14 @@ from models.embeddings.TransformerPositionalEncoding import (
 from models.NNComposition import NNComposition
 from models.output_layers.MeanPooledClassifier import MeanPooledClassifier
 from models.output_layers.MLPClassifier import MLPClassifier
-from models.output_layers.MLPClassifierForFuturePrediction import (
-    MLPClassifierForFuturePrediction,
+from models.output_layers.MLPClassifierForFuturePredictionV1 import (
+    MLPClassifierForFuturePredictionV1,
+)
+from models.output_layers.MLPClassifierForFuturePredictionV2 import (
+    MLPClassifierForFuturePredictionV2,
+)
+from models.output_layers.MLPClassifierForFuturePredictionV3 import (
+    MLPClassifierForFuturePredictionV3,
 )
 from models.TransformerEncoderLayer import TransformerEncoderLayer
 from models.TransformerFinalLayer import TransformerFinalLayer
@@ -136,8 +142,18 @@ def _get_output_module(cfg, device: torch.device) -> nn.Module:
             cfg.model.out_bias2_classifier,
             device=device,
         )
-    elif cfg.model.out_layer == "mlp-classifier-for-future-prediction":
-        return MLPClassifierForFuturePrediction(
+    elif cfg.model.out_layer == "mlp-classifier-for-future-prediction-v1":
+        return MLPClassifierForFuturePredictionV1(
+            cfg=cfg,
+            device=device,
+        )
+    elif cfg.model.out_layer == "mlp-classifier-for-future-prediction-v2":
+        return MLPClassifierForFuturePredictionV2(
+            cfg=cfg,
+            device=device,
+        )
+    elif cfg.model.out_layer == "mlp-classifier-for-future-prediction-v3":
+        return MLPClassifierForFuturePredictionV3(
             cfg=cfg,
             device=device,
         )

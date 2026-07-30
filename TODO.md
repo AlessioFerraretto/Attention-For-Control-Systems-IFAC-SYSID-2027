@@ -10,3 +10,5 @@ Tasks:
 - impulse response (problema malposto -> va regolarizzato)
 - future prediction (partiamo da questo) dati (u_past, y_past) dato (u_future) predire (y_future)
 - hyper parameter
+
+Filtrare l'ingresso (il rumore bianco) con un filtro passa basso
