@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
@@ -8,6 +10,7 @@ def evaluate_model(
     cfg,
     dataset,  # The dataset object passed from the training loop
     device,
+    save_path,
     num_test_samples=3,
 ):
     model.eval()
@@ -97,4 +100,8 @@ def evaluate_model(
 
     plt.tight_layout()
     plt.subplots_adjust(top=0.92)
-    plt.show()
+
+    Path(save_path).parent.mkdir(parents=True, exist_ok=True)
+
+    plt.savefig(save_path, dpi=150, bbox_inches="tight")
+    plt.close(fig)

@@ -186,3 +186,4 @@ outputs/
 # Wandb key
 wandb_api_key.txt
 /wandb
+/configs/experiment/bulk

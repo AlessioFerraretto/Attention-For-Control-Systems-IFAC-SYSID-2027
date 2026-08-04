@@ -10,27 +10,24 @@ class FuturePrediction:
 
     def compute_metrics(self, predictions, targets):
         """
-        TODO: Write description
+        Computes the Mean Squared Error (MSE) between predictions and targets.
 
         Parameters:
             predictions : torch.Tensor
-                Predicted token indices with shape (batch, seq_len, ...).
+                Predicted values with shape (batch, seq_len, ...).
             targets : torch.Tensor
-                Ground-truth token indices with shape compatible with `predictions`.
+                Ground-truth values with shape compatible with `predictions`.
 
-            Returns:
-            dict: A similarity-style score where smaller absolute error yields
-            a larger value.
+        Returns:
+            dict: A dictionary containing the MSE score. Smaller values indicate
+            better performance.
         """
+        # Cast to float to ensure accurate division and prevent issues
+        # if the inputs are integer types (like token indices)
+        predictions = predictions.float()
+        targets = targets.float()
 
-        # TODO: Check if this is correct
-        # Update: this is not correct, we may want to use R^2
-        # or another statistical method
+        # Calculate Mean Squared Error
+        mse = torch.mean((predictions - targets) ** 2)
 
-        distances = torch.abs(predictions - targets)
-
-        low_errors = torch.all(distances < 0.1, dim=1)
-
-        total_score = torch.sum(low_errors).item()
-
-        return {"correct_sequences": total_score}
+        return {"mse": mse.item()}

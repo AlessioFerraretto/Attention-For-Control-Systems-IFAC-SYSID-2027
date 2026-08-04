@@ -62,11 +62,11 @@ dataset:
 
   padding: 0
 
-  out_dir_name: "dynamic-future-prediction"
+  out_dir_name: "dynamic-future-prediction-v2"
 
 wandb:
   enable: True
   project: AttentionForControlSystems
   entity: alessioferraretto-unipd
-  dataset: dynamic-future-prediction
+  dataset: dynamic-future-prediction-v2
   model_name: "transformer"
