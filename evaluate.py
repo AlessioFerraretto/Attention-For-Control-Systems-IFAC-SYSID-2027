@@ -26,18 +26,18 @@ def evaluate_model(
     with torch.no_grad():
         for i in range(num_test_samples):
             # Automatically generate and format data using your dataset's __getitem__
-            inputs_tensor, target_tensor = dataset[i]
+            (inputs, targets, masks) = dataset[i]
 
             # Add batch dimension and move to device for inference
-            inputs = inputs_tensor.unsqueeze(0).to(device)
-
+            inputs = inputs.unsqueeze(0).to(device)
+            masks = masks.unsqueeze(0).to(device)
             # Inference
-            preds, logits = model(inputs)
+            preds, logits = model(inputs, masks)
             y_hat_future = preds[0, -n_future:].squeeze().cpu().numpy()
 
             # --- Extract data for plotting directly from the tensor ---
-            inputs_np = inputs_tensor.cpu().numpy()
-            target_np = target_tensor.cpu().numpy()
+            inputs_np = inputs.cpu().numpy()
+            target_np = targets.cpu().numpy()
 
             # Remove any size-1 dimensions (e.g. turns (200, 1) into (200,))
             inputs_np = inputs_np.squeeze()

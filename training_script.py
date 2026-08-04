@@ -156,8 +156,12 @@ def training(
 
         model.train(True)
         cumulative_loss = 0.0
-        for i, (inputs, labels) in enumerate(train_loader, start=1):
-            inputs, labels = inputs.to(device), labels.to(device)
+        for i, (inputs, targets, masks) in enumerate(train_loader, start=1):
+            inputs, targets, masks = (
+                inputs.to(device),
+                targets.to(device),
+                masks.to(device),
+            )
 
             opt.zero_grad()
 
@@ -167,9 +171,9 @@ def training(
             # based on the current global training step.
             strategy.before_step(model, global_step)
 
-            output, _ = model(inputs)
+            output, _ = model(inputs, mask=masks)
 
-            loss = loss_function(output, labels) + strategy.extra_loss(
+            loss = loss_function(output, targets) + strategy.extra_loss(
                 model, cfg, global_step
             )
 
@@ -218,17 +222,20 @@ def training(
 
         # ------------------------VISUALIZATION PHASE-----------------------------------------
 
+        if not cfg.save_model:
+            continue
+
         # Save checkpoint
         model_path = checkpoints_dir / f"model_{epoch}_{val_loss:.5f}_{mse:.3f}.pt"
-        # torch.save(
-        #    obj={
-        #        "model_state_dict": model.state_dict(),
-        #        "optimizer_state_dict": opt.state_dict(),
-        #        "loss": val_loss,
-        #        "accuracy": mse,
-        #    },
-        #    f=model_path,
-        # )
+        torch.save(
+            obj={
+                "model_state_dict": model.state_dict(),
+                "optimizer_state_dict": opt.state_dict(),
+                "loss": val_loss,
+                "accuracy": mse,
+            },
+            f=model_path,
+        )
 
         # Save best model in terms of accuracy (override the previous one)
         if mse < best_mse:
@@ -276,7 +283,6 @@ def save_best_model(
     loss: float,
     accuracy: float,
 ):
-    return
     """Save the best model found so far according to the supplied criteria.
 
     Parameters:
@@ -317,12 +323,16 @@ def _evaluate(model, loader, loss_fn, device, strategy=None):
     mse = 0
     total = 0
     with torch.no_grad():
-        for inputs, labels in loader:
-            inputs, labels = inputs.to(device), labels.to(device)
-            preds, logits = model(inputs)
-            total_loss += loss_fn(preds, labels).item() * inputs.size(0)
-            # correct += torch.sum(preds == labels).item()
-            performance_metrics = strategy.compute_metrics(preds, labels)
+        for inputs, targets, masks in loader:
+            inputs, targets, masks = (
+                inputs.to(device),
+                targets.to(device),
+                masks.to(device),
+            )
+            preds, logits = model(inputs, mask=masks)
+            total_loss += loss_fn(preds, targets).item() * inputs.size(0)
+            # correct += torch.sum(preds == targets).item()
+            performance_metrics = strategy.compute_metrics(preds, targets)
             mse += performance_metrics["mse"]
             total += inputs.size(0)
     strategy.exit_eval(model) if strategy else None

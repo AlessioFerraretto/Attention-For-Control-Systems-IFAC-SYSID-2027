@@ -34,7 +34,7 @@ class NNComposition(TrackableModule):
         self.layers = nn.ModuleList(layers)
         self.output = output_layer
 
-    def forward(self, u):
+    def forward(self, u, mask=None):
         """Process input through embedding and residual layers.
 
         Applies embedding lookup, passes through cascade of residual blocks,
@@ -50,7 +50,7 @@ class NNComposition(TrackableModule):
         u = self.embedding(u)
 
         for layer in self.layers:
-            u = layer(u)
+            u = layer(u, mask=mask)
 
         # Pass the embedding layer instance, in case the output requires it
         return self.output(u)

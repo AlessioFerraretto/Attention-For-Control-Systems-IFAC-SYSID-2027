@@ -60,12 +60,18 @@ class DynamicFuturePredictionV3(Dataset):
 
         # Stack into 2D features: [u, y] at each timestep
         past_input = torch.stack([u_past, y_past], dim=-1)
-
-        # Shape becomes (n_future, 2)
         future_input = torch.stack([u_future, padding_tensor], dim=-1)
 
         # Concatenate along the time dimension
         input = torch.cat([past_input, future_input], dim=0)
+
+        # Create the mask for the future part of the input
+        mask = torch.cat(
+            [
+                torch.zeros(self.n_past, dtype=torch.float),
+                torch.ones(self.n_future, dtype=torch.float),
+            ]
+        )
 
         # Target is the ground truth y values
         target = y_future
@@ -73,4 +79,4 @@ class DynamicFuturePredictionV3(Dataset):
         # Add the feature dimension to target
         target = target.unsqueeze(-1)
 
-        return input, target
+        return input, target, mask

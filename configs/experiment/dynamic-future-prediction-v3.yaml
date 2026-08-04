@@ -2,13 +2,15 @@
 
 seed: null
 
-epochs: 100
+epochs: 5
 learning_rate: 1e-3
 eval_every: 1
 
 training_batch_size: 256
 validation_batch_size: 256
 test_batch_size: 256
+
+save_model: True
 
 model:
   description: a transformer architecture

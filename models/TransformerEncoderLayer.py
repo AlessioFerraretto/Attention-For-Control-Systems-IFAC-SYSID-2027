@@ -106,11 +106,12 @@ class TransformerEncoderLayer(TrackableModule):
         else:
             raise ValueError(f"Unsupported activation function: {name}")
 
-    def forward(self, hidden):
+    def forward(self, hidden, mask=None):
         """Apply the encoder block to a sequence of hidden states.
 
         Parameters:
           hidden: Tensor of shape (batch, seq_len, features).
+          mask: Tensor of shape (batch, seq_len).
 
         Returns:
           torch.Tensor: Updated hidden states after self-attention and the
@@ -125,7 +126,9 @@ class TransformerEncoderLayer(TrackableModule):
                 f"got {tuple(hidden.shape)}"
             )
 
-        attn_out, _ = self.block["attn"](hidden, hidden, hidden, need_weights=False)
+        attn_out, _ = self.block["attn"](
+            hidden, hidden, hidden, key_padding_mask=mask, need_weights=False
+        )
         hidden = self.block["norm1"](hidden + attn_out)
         feed_forward = self.block["ffn"](hidden)
         hidden = self.block["norm2"](hidden + feed_forward)

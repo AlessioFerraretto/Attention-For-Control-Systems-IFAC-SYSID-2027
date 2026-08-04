@@ -70,11 +70,12 @@ class TransformerFinalLayer(TrackableModule):
         else:
             raise ValueError(f"Unsupported activation function: {name}")
 
-    def forward(self, last_hidden):
+    def forward(self, last_hidden, mask=None):
         """Apply normalization and the readout network to hidden states.
 
         Parameters:
           last_hidden: Tensor of shape (batch, seq_len, features).
+          mask: Tensor of shape (batch, seq_len).
 
         Returns:
           torch.Tensor: Output predictions for the provided hidden states.
