@@ -5,6 +5,8 @@ kernels and synthetic input-output datasets using a first-order stable spline
 (TC) prior.
 """
 
+import numpy as np
+import scipy.signal as signal
 import torch
 import torch.nn.functional as F
 
@@ -16,12 +18,7 @@ def generate_stable_spline_kernel(impulse_length, c, alpha):
     return c * (alpha**max_indices)
 
 
-def sample_system_impulse_response(
-    g_length,
-    c,
-    alpha,
-    jitter_regularization_parameter,
-):
+def sample_system_impulse_response(g_length, c, alpha, jitter_regularization_parameter):
     """Sample the stable spline hyperparameters and impulse response 'g'.
 
     Call this ONCE per system you want to identify (e.g., in Dataset __init__)
@@ -38,7 +35,7 @@ def sample_system_impulse_response(
     return g, {"c": c, "alpha": alpha}
 
 
-def simulate_io_data(g, n, snr_min, snr_max):
+def simulate_io_data(g, n, snr_min, snr_max, low_pass_cutoff, low_pass_cutoff_order):
     """Simulate input 'u' and noisy output 'y' given a fixed impulse response 'g'.
 
     Call this multiple times (e.g., in Dataset __getitem__) to generate
@@ -47,7 +44,23 @@ def simulate_io_data(g, n, snr_min, snr_max):
     g_length = len(g)
 
     # Generate input sequence u_t
-    u = torch.randn(n)
+    if low_pass_cutoff is not None:
+        # Generate white noise with NumPy
+        u_white = np.random.randn(n)
+
+        # Design a Butterworth low-pass filter (order 4 is a good default)
+        # btype='low' specifies a low-pass filter
+        b, a = signal.butter(
+            N=low_pass_cutoff_order, Wn=low_pass_cutoff, btype="low", analog=False
+        )
+
+        # Apply filtfilt for zero-phase filtering (prevents phase shifting the input)
+        u_filtered = signal.filtfilt(b, a, u_white)
+
+        # Convert back to a PyTorch tensor
+        u = torch.tensor(u_filtered.copy(), dtype=torch.float)
+    else:
+        u = torch.randn(n)
 
     # Compute noise-free output y^0 using convolution
     u_reshaped = u.view(1, 1, n)
@@ -77,6 +90,8 @@ def generate_stable_spline(
     snr_min,
     snr_max,
     jitter_regularization_parameter,
+    low_pass_cutoff,
+    low_pass_cutoff_order,
 ):
     """Generate a synthetic system identification problem.
 
@@ -86,14 +101,13 @@ def generate_stable_spline(
 
     # 1. Sample the system physics
     g, system_params = sample_system_impulse_response(
-        g_length,
-        c=c,
-        alpha=alpha,
-        jitter_regularization_parameter=jitter_regularization_parameter,
+        g_length, c, alpha, jitter_regularization_parameter
     )
 
     # 2. Simulate a single trajectory of length n
-    u, y, snr_db = simulate_io_data(g, n, snr_min, snr_max)
+    u, y, snr_db = simulate_io_data(
+        g, n, snr_min, snr_max, low_pass_cutoff, low_pass_cutoff_order
+    )
 
     # 3. Split the sequences into past and future
     u_past = u[:n_past]

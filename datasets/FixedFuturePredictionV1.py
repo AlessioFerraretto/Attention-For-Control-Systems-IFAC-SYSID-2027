@@ -32,13 +32,17 @@ class FixedFuturePredictionV1(Dataset):
         )
         self.padding = cfg.dataset.padding
         self.input_dim = cfg.model.input_dim
+        self.low_pass_cutoff = cfg.dataset.low_pass_cutoff
+        self.low_pass_cutoff_order = cfg.dataset.low_pass_cutoff_order
 
         # Fixes (g) using the given system (alpha, c)
         self.fixed_g, self.system_params = sample_system_impulse_response(
-            g_length=self.g_length,
-            c=self.c,
-            alpha=self.alpha,
-            jitter_regularization_parameter=self.jitter_regularization_parameter,
+            self.g_length,
+            self.c,
+            self.alpha,
+            self.jitter_regularization_parameter,
+            self.low_pass_cutoff,
+            self.low_pass_cutoff_order,
         )
 
     def __len__(self):
@@ -49,7 +53,12 @@ class FixedFuturePredictionV1(Dataset):
 
         # Generate (u, y) using the fixed (g)
         u, y, snr_db = simulate_io_data(
-            g=self.fixed_g, n=n_total, snr_min=self.snr_min, snr_max=self.snr_max
+            self.fixed_g,
+            n_total,
+            self.snr_min,
+            self.snr_max,
+            self.low_pass_cutoff,
+            self.low_pass_cutoff_order,
         )
 
         # Splitting

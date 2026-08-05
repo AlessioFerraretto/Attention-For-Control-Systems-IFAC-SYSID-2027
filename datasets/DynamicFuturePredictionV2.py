@@ -29,6 +29,8 @@ class DynamicFuturePredictionV2(Dataset):
             cfg.dataset.jitter_regularization_parameter
         )
         self.padding = cfg.dataset.padding
+        self.low_pass_cutoff = cfg.dataset.low_pass_cutoff
+        self.low_pass_cutoff_order = cfg.dataset.low_pass_cutoff_order
 
     def __len__(self):
         return self.batches_per_epoch * self.batch_size
@@ -44,6 +46,8 @@ class DynamicFuturePredictionV2(Dataset):
             self.snr_min,
             self.snr_max,
             self.jitter_regularization_parameter,
+            self.low_pass_cutoff,
+            self.low_pass_cutoff_order,
         )
 
         # Splitting
