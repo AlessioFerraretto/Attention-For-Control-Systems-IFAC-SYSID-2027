@@ -41,8 +41,6 @@ class FixedFuturePredictionV1(Dataset):
             self.c,
             self.alpha,
             self.jitter_regularization_parameter,
-            self.low_pass_cutoff,
-            self.low_pass_cutoff_order,
         )
 
     def __len__(self):

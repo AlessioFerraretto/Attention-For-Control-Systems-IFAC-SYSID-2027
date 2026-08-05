@@ -10,7 +10,6 @@ from models.embeddings.TransformerPositionalEncoding import (
     TransformerPositionalEncoding,
 )
 from models.NNComposition import NNComposition
-from models.output_layers.MeanPooledClassifier import MeanPooledClassifier
 from models.output_layers.MLPClassifier import MLPClassifier
 from models.output_layers.MLPClassifierForFuturePredictionV1 import (
     MLPClassifierForFuturePredictionV1,
@@ -20,6 +19,12 @@ from models.output_layers.MLPClassifierForFuturePredictionV2 import (
 )
 from models.output_layers.MLPClassifierForFuturePredictionV3 import (
     MLPClassifierForFuturePredictionV3,
+)
+from models.output_layers.MLPClassifierForImpulseResponsePrediction import (
+    MLPClassifierForImpulseResponsePrediction,
+)
+from models.output_layers.MLPClassifierForKernelParameterPrediction import (
+    MLPClassifierForKernelParameterPrediction,
 )
 from models.TransformerEncoderLayer import TransformerEncoderLayer
 from models.TransformerFinalLayer import TransformerFinalLayer
@@ -67,8 +72,6 @@ def _get_embedding(cfg, device: torch.device) -> nn.Embedding:
     Returns:
         nn.Embedding: The selected embedding layer.
     """
-
-    # TODO padding index
 
     if cfg.model.embedding == "continuous-signal-projection":
         return ContinuousSignalProjection()
@@ -125,15 +128,7 @@ def _get_output_module(cfg, device: torch.device) -> nn.Module:
         nn.Module: The configured output module.
     """
 
-    if cfg.model.out_layer == "mean-pooled-classifier":
-        return MeanPooledClassifier(
-            cfg.model.output_dim,  # TODO: Check if this is correct
-            cfg.model.model_dim,
-            cfg.model.head_bias,
-            cfg.model.eps,
-            device=device,
-        )
-    elif cfg.model.out_layer == "mlp-classifier":
+    if cfg.model.out_layer == "mlp-classifier":
         return MLPClassifier(
             cfg.model.input_dim_classifier,
             cfg.model.hidden_dim_classifier,
@@ -154,6 +149,16 @@ def _get_output_module(cfg, device: torch.device) -> nn.Module:
         )
     elif cfg.model.out_layer == "mlp-classifier-for-future-prediction-v3":
         return MLPClassifierForFuturePredictionV3(
+            cfg=cfg,
+            device=device,
+        )
+    elif cfg.model.out_layer == "mlp-classifier-for-impulse-response-prediction":
+        return MLPClassifierForImpulseResponsePrediction(
+            cfg=cfg,
+            device=device,
+        )
+    elif cfg.model.out_layer == "mlp-classifier-for-kernel-parameters-prediction":
+        return MLPClassifierForKernelParameterPrediction(
             cfg=cfg,
             device=device,
         )

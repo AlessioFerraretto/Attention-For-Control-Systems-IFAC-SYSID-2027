@@ -156,11 +156,11 @@ def training(
 
         model.train(True)
         cumulative_loss = 0.0
-        for i, (inputs, targets, masks) in enumerate(train_loader, start=1):
-            inputs, targets, masks = (
+        for i, (inputs, targets, *rest) in enumerate(train_loader, start=1):
+            masks = rest[0].to(device) if rest else None
+            inputs, targets = (
                 inputs.to(device),
                 targets.to(device),
-                masks.to(device),
             )
 
             opt.zero_grad()
@@ -323,11 +323,11 @@ def _evaluate(model, loader, loss_fn, device, strategy=None):
     mse = 0
     total = 0
     with torch.no_grad():
-        for inputs, targets, masks in loader:
-            inputs, targets, masks = (
+        for inputs, targets, *rest in loader:
+            masks = rest[0].to(device) if rest else None
+            inputs, targets = (
                 inputs.to(device),
                 targets.to(device),
-                masks.to(device),
             )
             preds, logits = model(inputs, mask=masks)
             total_loss += loss_fn(preds, targets).item() * inputs.size(0)
@@ -336,7 +336,7 @@ def _evaluate(model, loader, loss_fn, device, strategy=None):
             mse += performance_metrics["mse"]
             total += inputs.size(0)
     strategy.exit_eval(model) if strategy else None
-    return total_loss / max(total, 1), mse / max(total, 1)
+    return total_loss / max(total, 1), mse
 
 
 def test(

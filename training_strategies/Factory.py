@@ -8,6 +8,8 @@ TASKS = {
     "dynamic-future-prediction-v1": FuturePrediction,
     "dynamic-future-prediction-v2": FuturePrediction,
     "dynamic-future-prediction-v3": FuturePrediction,
+    "impulse-response-prediction": FuturePrediction,
+    "kernel-parameters-prediction": FuturePrediction,
 }
 MODELS = {"transformer": Transformer}
 

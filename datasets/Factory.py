@@ -16,8 +16,8 @@ from datasets.DynamicFuturePredictionV2 import DynamicFuturePredictionV2
 from datasets.DynamicFuturePredictionV3 import DynamicFuturePredictionV3
 from datasets.FixedFuturePredictionV1 import FixedFuturePredictionV1
 from datasets.FixedFuturePredictionV2 import FixedFuturePredictionV2
-from datasets.FixedImpulseResponsePrediction import FixedImpulseResponsePrediction
-from datasets.FixedKernelParametersPrediction import FixedKernelParametersPrediction
+from datasets.ImpulseResponsePrediction import ImpulseResponsePrediction
+from datasets.KernelParametersPrediction import KernelParametersPrediction
 
 logger = logging.getLogger(__name__)
 
@@ -101,25 +101,28 @@ def get_data_loaders(cfg) -> tuple[DataLoader, DataLoader, DataLoader]:
         test_dataset = DynamicFuturePredictionV3(
             cfg=cfg, batch_size=cfg.test_batch_size, alpha=fixed_alpha, c=fixed_c
         )
-    elif cfg.dataset.name == "fixed-impulse-response-prediction":
-        train_dataset = FixedImpulseResponsePrediction(
+    elif cfg.dataset.name == "impulse-response-prediction":
+        train_dataset = ImpulseResponsePrediction(
             cfg=cfg, batch_size=cfg.training_batch_size, alpha=fixed_alpha, c=fixed_c
         )
-        validation_dataset = FixedImpulseResponsePrediction(
+        validation_dataset = ImpulseResponsePrediction(
             cfg=cfg, batch_size=cfg.validation_batch_size, alpha=fixed_alpha, c=fixed_c
         )
-        test_dataset = FixedImpulseResponsePrediction(
+        test_dataset = ImpulseResponsePrediction(
             cfg=cfg, batch_size=cfg.test_batch_size, alpha=fixed_alpha, c=fixed_c
         )
-    elif cfg.dataset.name == "fixed-kernel-parameters-prediction":
-        train_dataset = FixedKernelParametersPrediction(
-            cfg=cfg, batch_size=cfg.training_batch_size, alpha=fixed_alpha, c=fixed_c
+    elif cfg.dataset.name == "kernel-parameters-prediction":
+        train_dataset = KernelParametersPrediction(
+            cfg=cfg,
+            batch_size=cfg.training_batch_size,
         )
-        validation_dataset = FixedKernelParametersPrediction(
-            cfg=cfg, batch_size=cfg.validation_batch_size, alpha=fixed_alpha, c=fixed_c
+        validation_dataset = KernelParametersPrediction(
+            cfg=cfg,
+            batch_size=cfg.validation_batch_size,
         )
-        test_dataset = FixedKernelParametersPrediction(
-            cfg=cfg, batch_size=cfg.test_batch_size, alpha=fixed_alpha, c=fixed_c
+        test_dataset = KernelParametersPrediction(
+            cfg=cfg,
+            batch_size=cfg.test_batch_size,
         )
 
     else:
