@@ -9,9 +9,9 @@ from monitor.TrackableModule import TrackableModule
 class ContinuousSignalProjection(TrackableModule):
     def __init__(self):
         super().__init__()
-        self.Myembedding = nn.Identity()
+        self.myEmbedding = nn.Identity()
 
     def forward(self, u: torch.Tensor) -> torch.Tensor:
         # TODO: Check if this is correct
 
-        return self.Myembedding(u)
+        return self.myEmbedding(u)

@@ -9,8 +9,8 @@ class TrainingStrategy:
     def loss_fn(self):
         return self.task.loss_fn()
 
-    def compute_metrics(self, preds, labels):
-        return self.task.compute_metrics(preds, labels)
+    def compute_metrics(self, preds, targets):
+        return self.task.compute_metrics(preds, targets)
 
     def extra_loss(self, model, cfg, global_step):
         return self.model_comp.extra_loss(

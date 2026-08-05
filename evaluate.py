@@ -1,59 +1,23 @@
-import hydra
+from pathlib import Path
+
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
-from omegaconf import DictConfig, OmegaConf
-from scipy import signal
-
-from models.Factory import construct_model
-from utils.Environment import get_job_id
-from utils.StableSplineGenerator import generate_stable_spline
-
-OmegaConf.register_new_resolver(name="slurm_job_id", resolver=get_job_id)
 
 
-@hydra.main(version_base=None, config_path="configs", config_name="config")
-def main(cfg: DictConfig):
-    # 1. Configuration (must match training)
-    future_horizon = 10
-    num_test_samples = 3  # How many systems to visualize
-    model_path = "model.pt"
-
-    # 2. Set different seed for test data generation
-
-    # 3. Load Model
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = construct_model(cfg=cfg, device=device)
-
-    try:
-        checkpoint = torch.load(model_path, map_location=device)
-        model.load_state_dict(checkpoint["model_state_dict"])
-        print(f"Successfully loaded {model_path}")
-    except FileNotFoundError:
-        print(f"Error: {model_path} not found.")
-        return
-
+def evaluate_model(
+    model,
+    cfg,
+    dataset,  # The dataset object passed from the training loop
+    device,
+    save_path,
+    num_test_samples=3,
+):
     model.eval()
+    n_past = cfg.dataset.n_past
+    n_future = cfg.dataset.n_future
 
-    # 4. Generate Test Data
-    print("Generating test dataset...")
-    samples = []
-    for _ in range(num_test_samples):
-        sample = generate_stable_spline(
-            g_length=cfg.dataset.g_length,
-            n_past=cfg.dataset.n_past,
-            n_future=cfg.dataset.n_future,
-            c_min=cfg.dataset.c_min,
-            c_max=cfg.dataset.c_max,
-            alpha_min=cfg.dataset.alpha_min,
-            alpha_max=cfg.dataset.alpha_max,
-            snr_min=cfg.dataset.snr_min,
-            snr_max=cfg.dataset.snr_max,
-            jitter_regularization_parameter=cfg.dataset.jitter_regularization_parameter,
-        )
-        samples.append(sample)
-
-    # 5. Plotting Setup
+    # 1. Plotting Setup
     fig, axes = plt.subplots(
         nrows=num_test_samples, ncols=2, figsize=(14, 4 * num_test_samples)
     )
@@ -61,95 +25,83 @@ def main(cfg: DictConfig):
 
     with torch.no_grad():
         for i in range(num_test_samples):
-            sample = samples[i]
+            # Automatically generate and format data using your dataset's __getitem__
+            (inputs, targets, masks) = dataset[i]
 
-            # Build the same input representation used during training.
-            u = np.concatenate([sample["u_past"], sample["u_future"]])
-            y = np.concatenate([sample["y_past"], sample["y_future"]])
-            inputs = (
-                torch.tensor(np.stack([u, y], axis=1), dtype=torch.float32)
-                .unsqueeze(0)
-                .to(device)
-            )
-
-            # Ground truth
-            g_true = sample["g"]
-            y_future_true = sample["y_future"]
-
+            # Add batch dimension and move to device for inference
+            inputs = inputs.unsqueeze(0).to(device)
+            masks = masks.unsqueeze(0).to(device)
             # Inference
-            _, logits = model(inputs)
-            g_hat = logits.squeeze(0).cpu().numpy()
-            y_hat_future = signal.convolve(sample["u_future"], g_hat, mode="full")[
-                : len(sample["u_future"])
-            ]
+            preds, logits = model(inputs, masks)
+            y_hat_future = preds[0, -n_future:].squeeze().cpu().numpy()
 
-            # --- Plot 1: Impulse Response (g) ---
-            ax_g = axes[i, 0] if num_test_samples > 1 else axes[0]
-            ax_g.plot(
-                g_true, label="True $g$", marker="o", linestyle="-", color="black"
-            )
-            ax_g.plot(
-                g_hat,
-                label=r"Predicted $\hat{g}$",
-                marker="x",
-                linestyle="--",
-                color="red",
-            )
-            ax_g.set_title(f"System {i + 1}: Impulse Response Estimation")
-            ax_g.set_xlabel("Time Lag")
-            ax_g.set_ylabel("Amplitude")
-            ax_g.grid(True, alpha=0.3)
-            ax_g.legend()
+            # --- Extract data for plotting directly from the tensor ---
+            inputs_np = inputs.cpu().numpy()
+            target_np = targets.cpu().numpy()
 
-            # --- Plot 2: Future Output Prediction (y) ---
-            ax_y = axes[i, 1] if num_test_samples > 1 else axes[1]
-            time_steps = range(cfg.dataset.n_past, cfg.dataset.n_past + future_horizon)
+            # Remove any size-1 dimensions (e.g. turns (200, 1) into (200,))
+            inputs_np = inputs_np.squeeze()
+            y_future_true = target_np.squeeze()
 
-            # Plot the last few past points for context
-            past_context = 15
-            context_steps = range(cfg.dataset.n_past - past_context, cfg.dataset.n_past)
+            # Safely extract based on the shape of the tensor
+            if inputs_np.ndim == 2 and inputs_np.shape[1] >= 2:
+                # Format: [100, 2] (u and y are parallel features)
+                u_past = inputs_np[:n_past, 0]
+                u_future = inputs_np[n_past:, 0]
+                y_past = inputs_np[:n_past, 1]
+            elif inputs_np.ndim == 1 and len(inputs_np) >= (n_past * 2):
+                # Format: [200] (Concatenated sequentially)
+                u_past = inputs_np[:n_past]
+                y_past = inputs_np[n_past : n_past * 2]
+                u_future = inputs_np[n_past * 2 : n_past * 2 + n_future]
+            else:
+                # Fallback if shape is completely unexpected
+                u_past = np.zeros(n_past)
+                u_future = np.zeros(n_future)
+                y_past = np.zeros(n_past)
+
+            # --- Plotting Axes Setup ---
+            if num_test_samples == 1:
+                ax_y, ax_u = axes[0], axes[1]
+            else:
+                ax_y, ax_u = axes[i, 0], axes[i, 1]
+
+            t_past = np.arange(n_past)
+            t_future = np.arange(n_past, n_past + n_future)
+
+            # --- Output (y) Plot ---
+            ax_y.plot(t_past, y_past, label="y_past (history)", color="gray")
             ax_y.plot(
-                context_steps,
-                sample["y_past"][-past_context:],
-                color="gray",
-                label="Past $y$",
-            )
-
-            future_time_steps = list(
-                range(cfg.dataset.n_past, cfg.dataset.n_past + len(y_future_true))
-            )
-            ax_y.plot(
-                future_time_steps,
-                y_future_true,
-                label="True Future $y$",
-                marker="o",
-                color="black",
+                t_future, y_future_true, label="y_future (ground truth)", color="blue"
             )
             ax_y.plot(
-                future_time_steps,
+                t_future,
                 y_hat_future,
-                label=r"Predicted Future $\hat{y}$",
-                marker="x",
+                label="y_future (prediction)",
+                color="red",
                 linestyle="--",
-                color="blue",
-            )
-            ax_y.axvline(
-                x=cfg.dataset.n_past - 0.5,
-                color="green",
-                linestyle=":",
-                label="Prediction Start",
             )
 
-            ax_y.set_title(f"System {i + 1}: Future Output Prediction")
-            ax_y.set_xlabel("Time Step")
-            ax_y.set_ylabel("System Output")
-            ax_y.grid(True, alpha=0.3)
+            ax_y.set_title(f"Sample {i + 1}: System Output (y)")
+            ax_y.set_xlabel("Time step")
+            ax_y.set_ylabel("Amplitude")
             ax_y.legend()
+            ax_y.grid(True)
+
+            # --- Input (u) Plot ---
+            ax_u.plot(t_past, u_past, label="u_past", color="lightgray")
+            ax_u.plot(t_future, u_future, label="u_future", color="green")
+
+            ax_u.set_title(f"Sample {i + 1}: System Input (u)")
+            ax_u.set_xlabel("Time step")
+            ax_u.set_ylabel("Amplitude")
+            ax_u.legend()
+            ax_u.grid(True)
 
     plt.tight_layout()
     plt.subplots_adjust(top=0.92)
-    plt.show()
 
+    Path(save_path).parent.mkdir(parents=True, exist_ok=True)
 
-if __name__ == "__main__":
-    main()
+    plt.savefig(save_path, dpi=150, bbox_inches="tight")
+    plt.close(fig)

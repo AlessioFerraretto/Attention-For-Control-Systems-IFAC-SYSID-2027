@@ -11,13 +11,16 @@ import logging
 import torch
 from torch.utils.data import DataLoader
 
-from datasets.FuturePrediction import FuturePrediction
-from datasets.StableSpline import StableSpline
+from datasets.DynamicFuturePredictionV1 import DynamicFuturePredictionV1
+from datasets.DynamicFuturePredictionV2 import DynamicFuturePredictionV2
+from datasets.DynamicFuturePredictionV3 import DynamicFuturePredictionV3
+from datasets.FixedFuturePredictionV1 import FixedFuturePredictionV1
+from datasets.FixedFuturePredictionV2 import FixedFuturePredictionV2
 
 logger = logging.getLogger(__name__)
 
 
-def get_data_loaders(cfg, device) -> tuple[DataLoader, DataLoader, DataLoader]:
+def get_data_loaders(cfg) -> tuple[DataLoader, DataLoader, DataLoader]:
     """Return training, validation, and testing data loaders based on configuration.
 
     This function loads the specified dataset defined in the configuration object
@@ -39,26 +42,62 @@ def get_data_loaders(cfg, device) -> tuple[DataLoader, DataLoader, DataLoader]:
 
     logger.info(f"Retrieving '{cfg.dataset.name}'")
 
-    if cfg.dataset.name == "stable-spline-kernel":
-        # TODO: Find a more elegant way
-        train_dataset = StableSpline(
-            cfg=cfg, batch_size=cfg.training_batch_size, device=device
+    fixed_alpha = (cfg.dataset.alpha_max - cfg.dataset.alpha_min) * torch.rand(
+        1
+    ).item() + cfg.dataset.alpha_min
+    fixed_c = (cfg.dataset.c_max - cfg.dataset.c_min) * torch.rand(
+        1
+    ).item() + cfg.dataset.c_min
+
+    if cfg.dataset.name == "fixed-future-prediction-v1":
+        train_dataset = FixedFuturePredictionV1(
+            cfg=cfg, batch_size=cfg.training_batch_size, alpha=fixed_alpha, c=fixed_c
         )
-        validation_dataset = StableSpline(
-            cfg=cfg, batch_size=cfg.validation_batch_size, device=device
+        validation_dataset = FixedFuturePredictionV1(
+            cfg=cfg, batch_size=cfg.validation_batch_size, alpha=fixed_alpha, c=fixed_c
         )
-        test_dataset = StableSpline(
-            cfg=cfg, batch_size=cfg.test_batch_size, device=device
+        test_dataset = FixedFuturePredictionV1(
+            cfg=cfg, batch_size=cfg.test_batch_size, alpha=fixed_alpha, c=fixed_c
         )
-    elif cfg.dataset.name == "future-prediction":
-        train_dataset = FuturePrediction(
-            cfg=cfg, batch_size=cfg.training_batch_size, device=device
+    elif cfg.dataset.name == "dynamic-future-prediction-v1":
+        train_dataset = DynamicFuturePredictionV1(
+            cfg=cfg, batch_size=cfg.training_batch_size, alpha=fixed_alpha, c=fixed_c
         )
-        validation_dataset = FuturePrediction(
-            cfg=cfg, batch_size=cfg.validation_batch_size, device=device
+        validation_dataset = DynamicFuturePredictionV1(
+            cfg=cfg, batch_size=cfg.validation_batch_size, alpha=fixed_alpha, c=fixed_c
         )
-        test_dataset = FuturePrediction(
-            cfg=cfg, batch_size=cfg.test_batch_size, device=device
+        test_dataset = DynamicFuturePredictionV1(
+            cfg=cfg, batch_size=cfg.test_batch_size, alpha=fixed_alpha, c=fixed_c
+        )
+    elif cfg.dataset.name == "fixed-future-prediction-v2":
+        train_dataset = FixedFuturePredictionV2(
+            cfg=cfg, batch_size=cfg.training_batch_size, alpha=fixed_alpha, c=fixed_c
+        )
+        validation_dataset = FixedFuturePredictionV2(
+            cfg=cfg, batch_size=cfg.validation_batch_size, alpha=fixed_alpha, c=fixed_c
+        )
+        test_dataset = FixedFuturePredictionV2(
+            cfg=cfg, batch_size=cfg.test_batch_size, alpha=fixed_alpha, c=fixed_c
+        )
+    elif cfg.dataset.name == "dynamic-future-prediction-v2":
+        train_dataset = DynamicFuturePredictionV2(
+            cfg=cfg, batch_size=cfg.training_batch_size, alpha=fixed_alpha, c=fixed_c
+        )
+        validation_dataset = DynamicFuturePredictionV2(
+            cfg=cfg, batch_size=cfg.validation_batch_size, alpha=fixed_alpha, c=fixed_c
+        )
+        test_dataset = DynamicFuturePredictionV2(
+            cfg=cfg, batch_size=cfg.test_batch_size, alpha=fixed_alpha, c=fixed_c
+        )
+    elif cfg.dataset.name == "dynamic-future-prediction-v3":
+        train_dataset = DynamicFuturePredictionV3(
+            cfg=cfg, batch_size=cfg.training_batch_size, alpha=fixed_alpha, c=fixed_c
+        )
+        validation_dataset = DynamicFuturePredictionV3(
+            cfg=cfg, batch_size=cfg.validation_batch_size, alpha=fixed_alpha, c=fixed_c
+        )
+        test_dataset = DynamicFuturePredictionV3(
+            cfg=cfg, batch_size=cfg.test_batch_size, alpha=fixed_alpha, c=fixed_c
         )
     else:
         raise NotImplementedError(

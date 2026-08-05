@@ -30,6 +30,7 @@ from torch.optim import Optimizer
 from torch.utils.data import DataLoader
 
 from datasets.Factory import get_data_loaders
+from evaluate import evaluate_model
 from models.Factory import construct_model
 from monitor.WandDBLogger import WandDBLogger
 from training_strategies.Factory import make_strategy
@@ -42,6 +43,8 @@ BestCriteria = Literal["acc", "loss"]
 # Register the `get_job_id` as a custom OmegaConf resolver. This allows the
 # output of the function to be accessed when building the Hydra configuration.
 OmegaConf.register_new_resolver(name="slurm_job_id", resolver=get_job_id)
+OmegaConf.register_new_resolver("mul", lambda x, y: int(x * y))
+OmegaConf.register_new_resolver("div", lambda x, y: int(x / y))
 
 
 @hydra.main(version_base=None, config_path="configs", config_name="config")
@@ -67,7 +70,7 @@ def main(cfg: DictConfig):
         log.info(f"Fixing PRNG seed: {cfg.seed}")
         torch.manual_seed(seed=cfg.seed)
 
-    train_loader, val_loader, test_loader = get_data_loaders(cfg=cfg, device=device)
+    train_loader, val_loader, test_loader = get_data_loaders(cfg=cfg)
 
     training(
         cfg=cfg,
@@ -137,7 +140,7 @@ def training(
     opt = strategy.make_optimizer(model, cfg)
     # Track the best validation accuracy seen during training.
     # Used to decide whether to save a new "best" model checkpoint.
-    best_val_accuracy = 0.0
+    best_mse = float("inf")
 
     # Track the best (lowest) validation loss.
     # Initialized to infinity so that any real loss will be lower.
@@ -153,8 +156,12 @@ def training(
 
         model.train(True)
         cumulative_loss = 0.0
-        for i, (inputs, labels) in enumerate(train_loader, start=1):
-            inputs, labels = inputs.to(device), labels.to(device)
+        for i, (inputs, targets, masks) in enumerate(train_loader, start=1):
+            inputs, targets, masks = (
+                inputs.to(device),
+                targets.to(device),
+                masks.to(device),
+            )
 
             opt.zero_grad()
 
@@ -164,9 +171,9 @@ def training(
             # based on the current global training step.
             strategy.before_step(model, global_step)
 
-            output, _ = model(inputs)
+            output, _ = model(inputs, mask=masks)
 
-            loss = loss_function(output, labels) + strategy.extra_loss(
+            loss = loss_function(output, targets) + strategy.extra_loss(
                 model, cfg, global_step
             )
 
@@ -192,38 +199,54 @@ def training(
 
         # ------------------------VALIDATION PHASE-----------------------------------------
 
-        val_loss, val_accuracy = _evaluate(
+        val_loss, mse = _evaluate(
             model, val_loader, loss_function, device, strategy=strategy
         )
 
-        log.info(
-            f"Validation Loss: {val_loss:.5f}, Validation Accuracy: {val_accuracy:.3f}"
-        )
+        log.info(f"Validation Loss: {val_loss:.5f}, MSE: {mse:.3f}")
+
+        # ------------------------VISUALIZATION PHASE-----------------------------------------
+        if epoch % cfg.eval_every == 0:
+            log.info(f"Running model evaluation at epoch {epoch}...")
+            try:
+                evaluate_model(
+                    model=model,
+                    cfg=cfg,
+                    dataset=val_loader.dataset,
+                    device=device,
+                    save_path=base_dir / "images" / f"epoch_{epoch}.png",
+                    num_test_samples=3,
+                )
+            except Exception as e:
+                log.error(f"Evaluation failed: {e}")
+
+        # ------------------------VISUALIZATION PHASE-----------------------------------------
+
+        if not cfg.save_model:
+            continue
 
         # Save checkpoint
-        model_path = (
-            checkpoints_dir / f"model_{epoch}_{val_loss:.5f}_{val_accuracy:.3f}.pt"
-        )
+        model_path = checkpoints_dir / f"model_{epoch}_{val_loss:.5f}_{mse:.3f}.pt"
         torch.save(
             obj={
                 "model_state_dict": model.state_dict(),
                 "optimizer_state_dict": opt.state_dict(),
                 "loss": val_loss,
-                "accuracy": val_accuracy,
+                "accuracy": mse,
             },
             f=model_path,
         )
 
         # Save best model in terms of accuracy (override the previous one)
-        if val_accuracy > best_val_accuracy:
-            best_val_accuracy = val_accuracy
+        if mse < best_mse:
+            best_mse = mse
             save_best_model(
                 model,
                 criteria="acc",
                 base_dir=base_dir,
                 opt=opt,
                 loss=val_loss,
-                accuracy=val_accuracy,
+                accuracy=mse,
             )
 
         # Save best model in terms of loss
@@ -235,20 +258,19 @@ def training(
                 base_dir=base_dir,
                 opt=opt,
                 loss=val_loss,
-                accuracy=val_accuracy,
+                accuracy=mse,
             )
 
         # ------------------------EARLY STOPPING-------------------------------
         # Once the task is essentially solved on the independent validation set,
         # there is no value in running the remaining epochs.
-        early_stop_thr = cfg.get("early_stop_val_acc", 1.01)
-        if val_accuracy >= early_stop_thr:
+        """if mse == 0:
             log.info(
                 f"Early stopping: validation accuracy {val_accuracy:.4f} "
                 f">= threshold {early_stop_thr} at epoch {epoch}. "
                 f"Skipping the remaining {cfg.epochs - epoch} epoch(s)."
             )
-            break
+            break"""
 
     log.info("Training complete.")
 
@@ -298,19 +320,23 @@ def _evaluate(model, loader, loss_fn, device, strategy=None):
     strategy.enter_eval(model) if strategy else None
     model.eval()
     total_loss = 0.0
-    correct = 0
+    mse = 0
     total = 0
     with torch.no_grad():
-        for inputs, labels in loader:
-            inputs, labels = inputs.to(device), labels.to(device)
-            preds, logits = model(inputs)
-            total_loss += loss_fn(preds, labels).item() * inputs.size(0)
-            # correct += torch.sum(preds == labels).item()
-            performance_metrics = strategy.compute_metrics(preds, labels)
-            correct += performance_metrics["correct_sequences"]
+        for inputs, targets, masks in loader:
+            inputs, targets, masks = (
+                inputs.to(device),
+                targets.to(device),
+                masks.to(device),
+            )
+            preds, logits = model(inputs, mask=masks)
+            total_loss += loss_fn(preds, targets).item() * inputs.size(0)
+            # correct += torch.sum(preds == targets).item()
+            performance_metrics = strategy.compute_metrics(preds, targets)
+            mse += performance_metrics["mse"]
             total += inputs.size(0)
     strategy.exit_eval(model) if strategy else None
-    return total_loss / max(total, 1), correct / max(total, 1)
+    return total_loss / max(total, 1), mse / max(total, 1)
 
 
 def test(
@@ -353,14 +379,14 @@ def test(
 
     if acc_file:
         best_acc = torch.load(f=acc_file[0], weights_only=False)
-        log.info(f"Uploaded: {acc_file[0]}")
+        log.info(f"Saved: {acc_file[0]}")
     else:
         log.error("Best accuracy model not found")
         sys.exit(1)
 
     if loss_file:
         best_loss = torch.load(f=loss_file[0], weights_only=False)
-        log.info(f"Uploaded: {loss_file[0]}")
+        log.info(f"Saved: {loss_file[0]}")
     else:
         log.error("Best loss model not found")
         sys.exit(1)
