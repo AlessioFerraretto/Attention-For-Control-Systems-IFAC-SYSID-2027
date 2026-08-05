@@ -15,7 +15,7 @@ pip install -r requirements.txt
 
 ## 3. Run your local scripts
 
-python -m training_script experiment=future-prediction
+python -m training_script experiment=dynamic-future-prediction-v3
 
 # UV + VENV
 
