@@ -44,7 +44,7 @@ model:
 
 dataset:
   name: dynamic-future-prediction-v3
-  description: stable spline kernel generator of the type [ [u_past, u_future], [y_past, padding], [mask=0, mask=1] ] -> [y_future]
+  description: stable spline kernel generator of the type [ [u_past, u_future], [y_past, padding] ] -> [y_future]
 
   shuffle: False # The sequences are already generated randomly
 
