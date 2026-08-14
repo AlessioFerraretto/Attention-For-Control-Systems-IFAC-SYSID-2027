@@ -44,7 +44,7 @@ model:
 
 dataset:
   name: impulse-response-prediction
-  description: stable spline kernel generator of the type [u, padding] -> [g]
+  description: stable spline kernel generator of the type [ [u, y], padding] -> [g]
 
   shuffle: False # The sequences are already generated randomly
 

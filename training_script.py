@@ -321,7 +321,11 @@ def _evaluate(model, loader, loss_fn, device, strategy=None):
     model.eval()
     total_loss = 0.0
     mse = 0
+    mae = 0
+    rmse = 0
+    mape = 0
     total = 0
+    count = 0
     with torch.no_grad():
         for inputs, targets, *rest in loader:
             masks = rest[0].to(device) if rest else None
@@ -334,9 +338,19 @@ def _evaluate(model, loader, loss_fn, device, strategy=None):
             # correct += torch.sum(preds == targets).item()
             performance_metrics = strategy.compute_metrics(preds, targets)
             mse += performance_metrics["mse"]
+            mae += performance_metrics["mae"]
+            rmse += performance_metrics["rmse"]
+            mape += performance_metrics["mape"]
             total += inputs.size(0)
+            count += 1
     strategy.exit_eval(model) if strategy else None
-    return total_loss / max(total, 1), mse
+
+    print("MSE: ", mse / count)
+    print("MAE: ", mae / count)
+    print("RMSE: ", rmse / count)
+    print("MAPE: ", mape / count)
+
+    return total_loss / max(total, 1), mse / count
 
 
 def test(

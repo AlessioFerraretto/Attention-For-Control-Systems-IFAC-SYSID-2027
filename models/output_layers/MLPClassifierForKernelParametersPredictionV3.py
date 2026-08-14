@@ -13,7 +13,7 @@ from torch import nn
 from monitor.TrackableModule import TrackableModule
 
 
-class MLPClassifierForKernelParameterPrediction(TrackableModule):
+class MLPClassifierForKernelParametersPredictionV3(TrackableModule):
     """Build a feed-forward classifier for impulse response prediction.
 
     The classifier consumes a flattened window of past and future features and
@@ -58,7 +58,7 @@ class MLPClassifierForKernelParameterPrediction(TrackableModule):
         """
 
         # 1. Slice only the 2 steps before flattening
-        u = u[:, -2:, :]
+        u = u[:, -2:]
 
         # 2. Flatten the 2D sequence into a 1D vector
         u_flattened = u.reshape(u.shape[0], -1)
@@ -66,7 +66,7 @@ class MLPClassifierForKernelParameterPrediction(TrackableModule):
         # 3. Get the continuous output values
         logits = self.classifier(u_flattened)
 
-        # Add the last dimension to match the required shape [batch, 2, 1]
-        predictions = logits.unsqueeze(-1)
+        # Add the last dimension to match the required shape [batch, 2]
+        predictions = logits
 
         return predictions, logits

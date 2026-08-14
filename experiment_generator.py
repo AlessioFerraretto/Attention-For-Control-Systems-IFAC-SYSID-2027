@@ -2,11 +2,12 @@ import itertools
 import os
 
 # Template configuration
-TEMPLATE = """# @package _global_
+TEMPLATE = """
+# @package _global_
 
 seed: null
 
-epochs: 5
+epochs: 50
 learning_rate: 1e-3
 eval_every: 1
 
@@ -83,9 +84,9 @@ wandb:
 
 
 # Define the parameter grids
-VAR_1 = [2, 4, 8]
-VAR_2 = [64, 128]
-VAR_3 = [8]
+VAR_1 = [4, 8, 32]
+VAR_2 = [64, 128, 256]
+VAR_3 = [16, 32]
 
 # Create an output directory so we don't clutter the root folder
 output_dir = "configs/experiment/bulk/"
@@ -109,7 +110,7 @@ for v1, v2, v3 in combinations:
     )
     count += 1
     # 2. Format the filename according to your required style
-    filename = f"name-{v1}-{v2}-{v3}.yaml"
+    filename = f"impulse-response-prediction-{v1}-{v2}-{v3}.yaml"
     filepath = os.path.join(output_dir, filename)
 
     # 3. Write the new configuration to the file

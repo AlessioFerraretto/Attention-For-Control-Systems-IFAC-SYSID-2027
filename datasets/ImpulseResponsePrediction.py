@@ -70,6 +70,6 @@ class ImpulseResponsePrediction(Dataset):
         uy = torch.stack([u, y], dim=-1)
         input = torch.cat([uy, padding_tensor], dim=0)
 
-        target = g.unsqueeze(-1)
+        target = g
 
         return input, target

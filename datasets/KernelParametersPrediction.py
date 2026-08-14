@@ -71,7 +71,7 @@ class KernelParametersPrediction(Dataset):
         y = torch.cat([y_past, y_future], dim=0)
 
         padding_tensor = torch.full(
-            size=(self.g_length, 2),
+            size=(2, 2),
             fill_value=self.padding,
             dtype=torch.float,
         )
@@ -79,6 +79,6 @@ class KernelParametersPrediction(Dataset):
         uy = torch.stack([u, y], dim=-1)
         input = torch.cat([uy, padding_tensor], dim=0)
 
-        target = torch.tensor((alpha, c)).unsqueeze(-1)
+        target = torch.tensor([alpha, c], dtype=torch.float)
 
         return input, target

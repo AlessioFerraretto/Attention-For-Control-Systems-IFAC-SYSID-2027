@@ -23,8 +23,20 @@ from models.output_layers.MLPClassifierForFuturePredictionV3 import (
 from models.output_layers.MLPClassifierForImpulseResponsePrediction import (
     MLPClassifierForImpulseResponsePrediction,
 )
-from models.output_layers.MLPClassifierForKernelParameterPrediction import (
-    MLPClassifierForKernelParameterPrediction,
+from models.output_layers.MLPClassifierForKernelParametersPrediction import (
+    MLPClassifierForKernelParametersPrediction,
+)
+from models.output_layers.MLPClassifierForKernelParametersPredictionV2 import (
+    MLPClassifierForKernelParametersPredictionV2,
+)
+from models.output_layers.MLPClassifierForKernelParametersPredictionV3 import (
+    MLPClassifierForKernelParametersPredictionV3,
+)
+from models.output_layers.MLPClassifierForKernelParametersPredictionV4 import (
+    MLPClassifierForKernelParametersPredictionV4,
+)
+from models.output_layers.MLPClassifierForKernelParametersPredictionV5 import (
+    MLPClassifierForKernelParametersPredictionV5,
 )
 from models.TransformerEncoderLayer import TransformerEncoderLayer
 from models.TransformerFinalLayer import TransformerFinalLayer
@@ -158,7 +170,27 @@ def _get_output_module(cfg, device: torch.device) -> nn.Module:
             device=device,
         )
     elif cfg.model.out_layer == "mlp-classifier-for-kernel-parameters-prediction":
-        return MLPClassifierForKernelParameterPrediction(
+        return MLPClassifierForKernelParametersPrediction(
+            cfg=cfg,
+            device=device,
+        )
+    elif cfg.model.out_layer == "mlp-classifier-for-kernel-parameters-prediction-v2":
+        return MLPClassifierForKernelParametersPredictionV2(
+            cfg=cfg,
+            device=device,
+        )
+    elif cfg.model.out_layer == "mlp-classifier-for-kernel-parameters-prediction-v3":
+        return MLPClassifierForKernelParametersPredictionV3(
+            cfg=cfg,
+            device=device,
+        )
+    elif cfg.model.out_layer == "mlp-classifier-for-kernel-parameters-prediction-v4":
+        return MLPClassifierForKernelParametersPredictionV4(
+            cfg=cfg,
+            device=device,
+        )
+    elif cfg.model.out_layer == "mlp-classifier-for-kernel-parameters-prediction-v5":
+        return MLPClassifierForKernelParametersPredictionV5(
             cfg=cfg,
             device=device,
         )
