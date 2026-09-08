@@ -156,11 +156,11 @@ def training(
 
         model.train(True)
         cumulative_loss = 0.0
-        for i, (inputs, targets, masks) in enumerate(train_loader, start=1):
-            inputs, targets, masks = (
+        for i, (inputs, targets, *rest) in enumerate(train_loader, start=1):
+            masks = rest[0].to(device) if rest else None
+            inputs, targets = (
                 inputs.to(device),
                 targets.to(device),
-                masks.to(device),
             )
 
             opt.zero_grad()
@@ -321,22 +321,36 @@ def _evaluate(model, loader, loss_fn, device, strategy=None):
     model.eval()
     total_loss = 0.0
     mse = 0
+    mae = 0
+    rmse = 0
+    mape = 0
     total = 0
+    count = 0
     with torch.no_grad():
-        for inputs, targets, masks in loader:
-            inputs, targets, masks = (
+        for inputs, targets, *rest in loader:
+            masks = rest[0].to(device) if rest else None
+            inputs, targets = (
                 inputs.to(device),
                 targets.to(device),
-                masks.to(device),
             )
             preds, logits = model(inputs, mask=masks)
             total_loss += loss_fn(preds, targets).item() * inputs.size(0)
             # correct += torch.sum(preds == targets).item()
             performance_metrics = strategy.compute_metrics(preds, targets)
             mse += performance_metrics["mse"]
+            mae += performance_metrics["mae"]
+            rmse += performance_metrics["rmse"]
+            mape += performance_metrics["mape"]
             total += inputs.size(0)
+            count += 1
     strategy.exit_eval(model) if strategy else None
-    return total_loss / max(total, 1), mse / max(total, 1)
+
+    print("MSE: ", mse / count)
+    print("MAE: ", mae / count)
+    print("RMSE: ", rmse / count)
+    print("MAPE: ", mape / count)
+
+    return total_loss / max(total, 1), mse / count
 
 
 def test(

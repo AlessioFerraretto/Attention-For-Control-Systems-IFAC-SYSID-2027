@@ -69,18 +69,10 @@ class DynamicFuturePredictionV3(Dataset):
         # Concatenate along the time dimension
         input = torch.cat([past_input, future_input], dim=0)
 
-        # Create the mask for the future part of the input
-        mask = torch.cat(
-            [
-                torch.zeros(self.n_past, dtype=torch.float),
-                torch.ones(self.n_future, dtype=torch.float),
-            ]
-        )
-
         # Target is the ground truth y values
         target = y_future
 
         # Add the feature dimension to target
         target = target.unsqueeze(-1)
 
-        return input, target, mask
+        return input, target

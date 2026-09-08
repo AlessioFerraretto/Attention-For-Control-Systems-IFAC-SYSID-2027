@@ -30,4 +30,15 @@ class FuturePrediction:
         # Calculate Mean Squared Error
         mse = torch.mean((predictions - targets) ** 2)
 
-        return {"mse": mse.item()}
+        relative_error = torch.abs(predictions - targets) / (torch.abs(targets) + 1e-8)
+        absolute_error = torch.abs(predictions - targets)
+        mae = torch.mean(absolute_error)
+        rmse = torch.sqrt(mse)
+        percentage_error = torch.mean(relative_error) * 100
+
+        return {
+            "mse": mse.item(),
+            "mae": mae.item(),
+            "rmse": rmse.item(),
+            "mape": percentage_error.item(),
+        }

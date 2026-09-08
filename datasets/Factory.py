@@ -16,6 +16,12 @@ from datasets.DynamicFuturePredictionV2 import DynamicFuturePredictionV2
 from datasets.DynamicFuturePredictionV3 import DynamicFuturePredictionV3
 from datasets.FixedFuturePredictionV1 import FixedFuturePredictionV1
 from datasets.FixedFuturePredictionV2 import FixedFuturePredictionV2
+from datasets.ImpulseResponsePrediction import ImpulseResponsePrediction
+from datasets.KernelParametersPrediction import KernelParametersPrediction
+from datasets.KernelParametersPredictionV2 import KernelParametersPredictionV2
+from datasets.KernelParametersPredictionV3 import KernelParametersPredictionV3
+from datasets.KernelParametersPredictionV4 import KernelParametersPredictionV4
+from datasets.KernelParametersPredictionV5 import KernelParametersPredictionV5
 
 logger = logging.getLogger(__name__)
 
@@ -98,6 +104,81 @@ def get_data_loaders(cfg) -> tuple[DataLoader, DataLoader, DataLoader]:
         )
         test_dataset = DynamicFuturePredictionV3(
             cfg=cfg, batch_size=cfg.test_batch_size, alpha=fixed_alpha, c=fixed_c
+        )
+    elif cfg.dataset.name == "impulse-response-prediction":
+        train_dataset = ImpulseResponsePrediction(
+            cfg=cfg, batch_size=cfg.training_batch_size, alpha=fixed_alpha, c=fixed_c
+        )
+        validation_dataset = ImpulseResponsePrediction(
+            cfg=cfg, batch_size=cfg.validation_batch_size, alpha=fixed_alpha, c=fixed_c
+        )
+        test_dataset = ImpulseResponsePrediction(
+            cfg=cfg, batch_size=cfg.test_batch_size, alpha=fixed_alpha, c=fixed_c
+        )
+    elif cfg.dataset.name == "kernel-parameters-prediction":
+        train_dataset = KernelParametersPrediction(
+            cfg=cfg,
+            batch_size=cfg.training_batch_size,
+        )
+        validation_dataset = KernelParametersPrediction(
+            cfg=cfg,
+            batch_size=cfg.validation_batch_size,
+        )
+        test_dataset = KernelParametersPrediction(
+            cfg=cfg,
+            batch_size=cfg.test_batch_size,
+        )
+    elif cfg.dataset.name == "kernel-parameters-prediction-v2":
+        train_dataset = KernelParametersPredictionV2(
+            cfg=cfg,
+            batch_size=cfg.training_batch_size,
+        )
+        validation_dataset = KernelParametersPredictionV2(
+            cfg=cfg,
+            batch_size=cfg.validation_batch_size,
+        )
+        test_dataset = KernelParametersPredictionV2(
+            cfg=cfg,
+            batch_size=cfg.test_batch_size,
+        )
+    elif cfg.dataset.name == "kernel-parameters-prediction-v3":
+        train_dataset = KernelParametersPredictionV3(
+            cfg=cfg,
+            batch_size=cfg.training_batch_size,
+        )
+        validation_dataset = KernelParametersPredictionV3(
+            cfg=cfg,
+            batch_size=cfg.validation_batch_size,
+        )
+        test_dataset = KernelParametersPredictionV3(
+            cfg=cfg,
+            batch_size=cfg.test_batch_size,
+        )
+    elif cfg.dataset.name == "kernel-parameters-prediction-v4":
+        train_dataset = KernelParametersPredictionV4(
+            cfg=cfg,
+            batch_size=cfg.training_batch_size,
+        )
+        validation_dataset = KernelParametersPredictionV4(
+            cfg=cfg,
+            batch_size=cfg.validation_batch_size,
+        )
+        test_dataset = KernelParametersPredictionV4(
+            cfg=cfg,
+            batch_size=cfg.test_batch_size,
+        )
+    elif cfg.dataset.name == "kernel-parameters-prediction-v5":
+        train_dataset = KernelParametersPredictionV5(
+            cfg=cfg,
+            batch_size=cfg.training_batch_size,
+        )
+        validation_dataset = KernelParametersPredictionV5(
+            cfg=cfg,
+            batch_size=cfg.validation_batch_size,
+        )
+        test_dataset = KernelParametersPredictionV5(
+            cfg=cfg,
+            batch_size=cfg.test_batch_size,
         )
     else:
         raise NotImplementedError(
