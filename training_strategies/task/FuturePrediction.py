@@ -10,35 +10,32 @@ class FuturePrediction:
 
     def compute_metrics(self, predictions, targets):
         """
-        Computes the Mean Squared Error (MSE) between predictions and targets.
+        Computes the FIT metric between predicted and true impulse responses.
 
         Parameters:
             predictions : torch.Tensor
-                Predicted values with shape (batch, seq_len, ...).
+                Predicted impulse responses with shape (batch_size, g_length).
             targets : torch.Tensor
-                Ground-truth values with shape compatible with `predictions`.
+                Ground-truth impulse responses with shape (batch_size, g_length).
 
         Returns:
-            dict: A dictionary containing the MSE score. Smaller values indicate
-            better performance.
+            dict: A dictionary containing 'fit', the closer to 100 the better.
         """
-        # Cast to float to ensure accurate division and prevent issues
-        # if the inputs are integer types (like token indices)
+        # Cast to float to ensure accurate computation
         predictions = predictions.float()
         targets = targets.float()
 
-        # Calculate Mean Squared Error
-        mse = torch.mean((predictions - targets) ** 2)
+        # Calculate the FIT metric (batch-wise, then averaged)
+        # Compute the L2 (Euclidean) norm along the sequence dimension (dim=-1)
+        norm_diff = torch.linalg.vector_norm(targets - predictions, dim=-1)
+        norm_true = torch.linalg.vector_norm(targets, dim=-1)
 
-        relative_error = torch.abs(predictions - targets) / (torch.abs(targets) + 1e-8)
-        absolute_error = torch.abs(predictions - targets)
-        mae = torch.mean(absolute_error)
-        rmse = torch.sqrt(mse)
-        percentage_error = torch.mean(relative_error) * 100
+        # Add an epsilon (1e-8) to the denominator to avoid division by zero
+        fit_per_sample = 100.0 * (1.0 - (norm_diff / (norm_true + 1e-8)))
+        
+        # Compute the mean FIT across the batch
+        mean_fit = torch.mean(fit_per_sample)
 
         return {
-            "mse": mse.item(),
-            "mae": mae.item(),
-            "rmse": rmse.item(),
-            "mape": percentage_error.item(),
+            "fit": mean_fit.item()
         }

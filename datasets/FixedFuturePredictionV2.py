@@ -47,7 +47,7 @@ class FixedFuturePredictionV2(Dataset):
 
     def __getitem__(self, idx):
         # Dynamically generate u and y using the fixed system
-        u, y, snr_db = simulate_io_data(
+        u, y, snr = simulate_io_data(
             self.fixed_g,
             self.n,
             self.snr_min,

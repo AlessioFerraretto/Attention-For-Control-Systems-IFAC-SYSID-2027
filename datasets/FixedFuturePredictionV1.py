@@ -50,7 +50,7 @@ class FixedFuturePredictionV1(Dataset):
         n_total = self.n_past + self.n_future
 
         # Generate (u, y) using the fixed (g)
-        u, y, snr_db = simulate_io_data(
+        u, y, snr = simulate_io_data(
             self.fixed_g,
             n_total,
             self.snr_min,

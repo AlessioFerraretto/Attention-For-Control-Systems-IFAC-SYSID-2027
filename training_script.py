@@ -171,7 +171,7 @@ def training(
             # based on the current global training step.
             strategy.before_step(model, global_step)
 
-            output, _ = model(inputs, mask=masks)
+            output, _ = model(inputs, masks)
 
             loss = loss_function(output, targets) + strategy.extra_loss(
                 model, cfg, global_step
@@ -320,10 +320,7 @@ def _evaluate(model, loader, loss_fn, device, strategy=None):
     strategy.enter_eval(model) if strategy else None
     model.eval()
     total_loss = 0.0
-    mse = 0
-    mae = 0
-    rmse = 0
-    mape = 0
+    fit = 0
     total = 0
     count = 0
     with torch.no_grad():
@@ -333,24 +330,15 @@ def _evaluate(model, loader, loss_fn, device, strategy=None):
                 inputs.to(device),
                 targets.to(device),
             )
-            preds, logits = model(inputs, mask=masks)
+            preds, logits = model(inputs, masks)
             total_loss += loss_fn(preds, targets).item() * inputs.size(0)
             # correct += torch.sum(preds == targets).item()
             performance_metrics = strategy.compute_metrics(preds, targets)
-            mse += performance_metrics["mse"]
-            mae += performance_metrics["mae"]
-            rmse += performance_metrics["rmse"]
-            mape += performance_metrics["mape"]
+            fit += performance_metrics["fit"]
             total += inputs.size(0)
             count += 1
     strategy.exit_eval(model) if strategy else None
-
-    print("MSE: ", mse / count)
-    print("MAE: ", mae / count)
-    print("RMSE: ", rmse / count)
-    print("MAPE: ", mape / count)
-
-    return total_loss / max(total, 1), mse / count
+    return total_loss / max(total, 1), fit / max(total, 1)
 
 
 def test(
