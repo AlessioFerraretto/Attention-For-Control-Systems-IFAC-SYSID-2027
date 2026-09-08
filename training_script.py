@@ -140,7 +140,7 @@ def training(
     opt = strategy.make_optimizer(model, cfg)
     # Track the best validation accuracy seen during training.
     # Used to decide whether to save a new "best" model checkpoint.
-    best_mse = float("inf")
+    best_fit = float("-inf")
 
     # Track the best (lowest) validation loss.
     # Initialized to infinity so that any real loss will be lower.
@@ -199,11 +199,11 @@ def training(
 
         # ------------------------VALIDATION PHASE-----------------------------------------
 
-        val_loss, mse = _evaluate(
+        val_loss, fit = _evaluate(
             model, val_loader, loss_function, device, strategy=strategy
         )
 
-        log.info(f"Validation Loss: {val_loss:.5f}, MSE: {mse:.3f}")
+        log.info(f"Validation Loss: {val_loss:.5f}, FIT: {fit:.3f}")
 
         # ------------------------VISUALIZATION PHASE-----------------------------------------
         if epoch % cfg.eval_every == 0:
@@ -226,27 +226,27 @@ def training(
             continue
 
         # Save checkpoint
-        model_path = checkpoints_dir / f"model_{epoch}_{val_loss:.5f}_{mse:.3f}.pt"
+        model_path = checkpoints_dir / f"model_{epoch}_{val_loss:.5f}_{fit:.3f}.pt"
         torch.save(
             obj={
                 "model_state_dict": model.state_dict(),
                 "optimizer_state_dict": opt.state_dict(),
                 "loss": val_loss,
-                "accuracy": mse,
+                "accuracy": fit,
             },
             f=model_path,
         )
 
         # Save best model in terms of accuracy (override the previous one)
-        if mse < best_mse:
-            best_mse = mse
+        if fit > best_fit:
+            best_fit = fit
             save_best_model(
                 model,
                 criteria="acc",
                 base_dir=base_dir,
                 opt=opt,
                 loss=val_loss,
-                accuracy=mse,
+                accuracy=fit,
             )
 
         # Save best model in terms of loss
@@ -258,19 +258,19 @@ def training(
                 base_dir=base_dir,
                 opt=opt,
                 loss=val_loss,
-                accuracy=mse,
+                accuracy=fit,
             )
 
         # ------------------------EARLY STOPPING-------------------------------
         # Once the task is essentially solved on the independent validation set,
         # there is no value in running the remaining epochs.
-        """if mse == 0:
+        if fit >= 100:
             log.info(
-                f"Early stopping: validation accuracy {val_accuracy:.4f} "
-                f">= threshold {early_stop_thr} at epoch {epoch}. "
+                f"Early stopping"
+                f">= threshold at epoch {epoch}. "
                 f"Skipping the remaining {cfg.epochs - epoch} epoch(s)."
             )
-            break"""
+            break
 
     log.info("Training complete.")
 
@@ -322,7 +322,6 @@ def _evaluate(model, loader, loss_fn, device, strategy=None):
     total_loss = 0.0
     fit = 0
     total = 0
-    count = 0
     with torch.no_grad():
         for inputs, targets, *rest in loader:
             masks = rest[0].to(device) if rest else None
@@ -334,9 +333,8 @@ def _evaluate(model, loader, loss_fn, device, strategy=None):
             total_loss += loss_fn(preds, targets).item() * inputs.size(0)
             # correct += torch.sum(preds == targets).item()
             performance_metrics = strategy.compute_metrics(preds, targets)
-            fit += performance_metrics["fit"]
+            fit += performance_metrics["fit"] * inputs.size(0)
             total += inputs.size(0)
-            count += 1
     strategy.exit_eval(model) if strategy else None
     return total_loss / max(total, 1), fit / max(total, 1)
 
