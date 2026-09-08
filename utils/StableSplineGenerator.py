@@ -70,15 +70,15 @@ def simulate_io_data(g, n, snr_min, snr_max, low_pass_cutoff, low_pass_cutoff_or
     y0 = y0_full[0, 0, :n]
 
     # Add measurement noise e_t
-    snr_db = (snr_max - snr_min) * torch.rand(1).item() + snr_min
-    snr_linear = 10 ** (snr_db / 10)
-
-    noise_variance = torch.var(y0, unbiased=False) / snr_linear
+    # SNR is defined as the variance ratio: Var(y0) / Var(noise)
+    snr = (snr_max - snr_min) * torch.rand(1).item() + snr_min
+    
+    noise_variance = torch.var(y0, unbiased=False) / snr
     e = torch.randn(n) * torch.sqrt(noise_variance)
 
     y = y0 + e
 
-    return u, y, snr_db
+    return u, y, snr
 
 
 def generate_stable_spline(
@@ -105,7 +105,7 @@ def generate_stable_spline(
     )
 
     # 2. Simulate a single trajectory of length n
-    u, y, snr_db = simulate_io_data(
+    u, y, snr = simulate_io_data(
         g, n, snr_min, snr_max, low_pass_cutoff, low_pass_cutoff_order
     )
 
@@ -124,6 +124,6 @@ def generate_stable_spline(
         "eta": {
             "c": system_params["c"],
             "alpha": system_params["alpha"],
-            "snr_db": snr_db,
+            "snr": snr,
         },
     }
