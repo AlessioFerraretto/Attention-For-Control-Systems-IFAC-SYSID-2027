@@ -55,7 +55,7 @@ def evaluate_model_kernel_prediction(
     with torch.no_grad():
         for i in range(num_test_samples):
             # Automatically generate and format data using your dataset's __getitem__
-            (inputs, targets, *rest) = dataset[i]
+            (inputs, targets, info, *rest) = dataset[i]
             masks = rest[0].unsqueeze(0).to(device) if rest else None
 
             # Add batch dimension and move to device for inference
@@ -173,7 +173,7 @@ def evaluate_model_impulse_response_prediction(
     with torch.no_grad():
         for i in range(num_test_samples):
             # Automatically generate and format data using your dataset's __getitem__
-            (inputs, targets, *rest) = dataset[i]
+            (inputs, targets, info, *rest) = dataset[i]
             masks = rest[0].unsqueeze(0).to(device) if rest else None
 
             # Add batch dimension and move to device for inference
@@ -263,7 +263,7 @@ def evaluate_model_future_prediction(
     with torch.no_grad():
         for i in range(num_test_samples):
             # Automatically generate and format data using your dataset's __getitem__
-            (inputs, targets, *rest) = dataset[i]
+            (inputs, targets, info, *rest) = dataset[i]
             masks = rest[0].unsqueeze(0).to(device) if rest else None
 
             # Add batch dimension and move to device for inference

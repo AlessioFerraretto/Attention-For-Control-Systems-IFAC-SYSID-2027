@@ -23,7 +23,7 @@ model:
 
   # Layer parameters
   input_dim: 2
-  model_dim: 128
+  model_dim: 64
   num_heads: 8
   output_dim: ${model.model_dim}
   activation_function: gelu
@@ -50,7 +50,7 @@ dataset:
 
   batches_per_epoch: 1000
 
-  g_length: 64
+  g_length: 32
   n_past: 90
   n_future: 10
   c_min: 0.0001

@@ -72,7 +72,7 @@ def simulate_io_data(g, n, snr_min, snr_max, low_pass_cutoff, low_pass_cutoff_or
     # Add measurement noise e_t
     # SNR is defined as the variance ratio: Var(y0) / Var(noise)
     snr = (snr_max - snr_min) * torch.rand(1).item() + snr_min
-    
+
     noise_variance = torch.var(y0, unbiased=False) / snr
     e = torch.randn(n) * torch.sqrt(noise_variance)
 

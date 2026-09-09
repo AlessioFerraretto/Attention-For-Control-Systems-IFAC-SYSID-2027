@@ -9,7 +9,7 @@ seed: null
 
 epochs: 50
 learning_rate: 1e-3
-eval_every: 1
+eval_every: 5
 
 training_batch_size: 256
 validation_batch_size: 256
@@ -49,7 +49,7 @@ model:
 
 dataset:
   name: impulse-response-prediction
-  description: stable spline kernel generator of the type [u, padding] -> [g]
+  description: stable spline kernel generator of the type [ [u, y], padding] -> [g]
 
   shuffle: False # The sequences are already generated randomly
 
@@ -68,8 +68,8 @@ dataset:
   jitter_regularization_parameter: 0.00001
 
   padding: 0
-  low_pass_cutoff: 0.5
-  low_pass_cutoff_order: 4
+  low_pass_cutoff: null
+  low_pass_cutoff_order: -1
 
   out_dir_name: "impulse-response-prediction"
 
@@ -80,13 +80,14 @@ wandb:
   dataset: impulse-response-prediction
   model_name: "transformer"
 
+
 """
 
 
 # Define the parameter grids
-VAR_1 = [4, 8, 32]
-VAR_2 = [64, 128, 256]
-VAR_3 = [16, 32]
+VAR_1 = [4, 8]
+VAR_2 = [64, 128]
+VAR_3 = [8, 16]
 
 # Create an output directory so we don't clutter the root folder
 output_dir = "configs/experiment/bulk/"

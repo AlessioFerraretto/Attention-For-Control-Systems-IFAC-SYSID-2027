@@ -32,10 +32,8 @@ class FuturePrediction:
 
         # Add an epsilon (1e-8) to the denominator to avoid division by zero
         fit_per_sample = 100.0 * (1.0 - (norm_diff / (norm_true + 1e-8)))
-        
+
         # Compute the mean FIT across the batch
         mean_fit = torch.mean(fit_per_sample)
 
-        return {
-            "fit": mean_fit.item()
-        }
+        return {"fit": mean_fit.item()}

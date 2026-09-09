@@ -35,6 +35,7 @@ from models.Factory import construct_model
 from monitor.WandDBLogger import WandDBLogger
 from training_strategies.Factory import make_strategy
 from utils.Environment import get_job_id, get_torch_device
+from utils.Estimators import compute_ls, compute_mmse
 
 log = logging.getLogger("script")
 
@@ -156,7 +157,7 @@ def training(
 
         model.train(True)
         cumulative_loss = 0.0
-        for i, (inputs, targets, *rest) in enumerate(train_loader, start=1):
+        for i, (inputs, targets, info, *rest) in enumerate(train_loader, start=1):
             masks = rest[0].to(device) if rest else None
             inputs, targets = (
                 inputs.to(device),
@@ -200,7 +201,13 @@ def training(
         # ------------------------VALIDATION PHASE-----------------------------------------
 
         val_loss, fit = _evaluate(
-            model, val_loader, loss_function, device, strategy=strategy
+            model,
+            val_loader,
+            loss_function,
+            device,
+            strategy=strategy,
+            is_test=False,
+            wandb_logger=wandb_logger,
         )
 
         log.info(f"Validation Loss: {val_loss:.5f}, FIT: {fit:.3f}")
@@ -220,7 +227,7 @@ def training(
             except Exception as e:
                 log.error(f"Evaluation failed: {e}")
 
-        # ------------------------VISUALIZATION PHASE-----------------------------------------
+        # ------------------------SAVE PHASE-----------------------------------------
 
         if not cfg.save_model:
             continue
@@ -316,27 +323,73 @@ def save_best_model(
     )
 
 
-def _evaluate(model, loader, loss_fn, device, strategy=None):
+def _evaluate(
+    model, loader, loss_fn, device, strategy=None, is_test=False, wandb_logger=None
+):
     strategy.enter_eval(model) if strategy else None
     model.eval()
+
     total_loss = 0.0
     fit = 0
     total = 0
+
+    total_fit_ls = 0.0
+    total_fit_mmse = 0.0
+
     with torch.no_grad():
-        for inputs, targets, *rest in loader:
+        for inputs, targets, info, *rest in loader:
             masks = rest[0].to(device) if rest else None
             inputs, targets = (
                 inputs.to(device),
                 targets.to(device),
             )
+
             preds, logits = model(inputs, masks)
-            total_loss += loss_fn(preds, targets).item() * inputs.size(0)
-            # correct += torch.sum(preds == targets).item()
+            batch_size = inputs.size(0)
+
+            total_loss += loss_fn(preds, targets).item() * batch_size
+
             performance_metrics = strategy.compute_metrics(preds, targets)
-            fit += performance_metrics["fit"] * inputs.size(0)
-            total += inputs.size(0)
+            fit += performance_metrics["fit"] * batch_size
+
+            if is_test and info is not None:
+                u_batch = info["u"].to(device)
+                y_batch = info["y"].to(device)
+                noise_var_batch = info["noise_variance"].to(device)
+                kernel_matrix_batch = info["kernel_matrix"].to(device)
+                g_true_batch = targets
+
+                _, fit_ls_batch = compute_ls(
+                    u_batch, y_batch, g_true_batch, loader.dataset.g_length
+                )
+                _, fit_mmse_batch = compute_mmse(
+                    u_batch, y_batch, g_true_batch, noise_var_batch, kernel_matrix_batch
+                )
+
+                total_fit_ls += fit_ls_batch.sum().item()
+                total_fit_mmse += fit_mmse_batch.sum().item()
+
+            total += batch_size
+
     strategy.exit_eval(model) if strategy else None
-    return total_loss / max(total, 1), fit / max(total, 1)
+
+    avg_loss = total_loss / max(total, 1)
+    avg_fit = fit / max(total, 1)
+
+    if is_test:
+        average_fit_ls = total_fit_ls / max(total, 1)
+        average_fit_mmse = total_fit_mmse / max(total, 1)
+
+        log.info("Evaluation LS and MMSE on the test set")
+        log.info(f"LS FIT: {average_fit_ls:.3f}")
+        log.info(f"MMSE FIT: {average_fit_mmse:.3f}")
+
+        if wandb_logger:
+            wandb_logger.log(
+                {"test/fit_ls": average_fit_ls, "test/fit_mmse": average_fit_mmse}
+            )
+
+    return avg_loss, avg_fit
 
 
 def test(
@@ -401,13 +454,25 @@ def test(
     strategy_acc = make_strategy(cfg)
     strategy_acc.setup_for_eval(model_acc)
     test_loss_a, test_accuracy_a = _evaluate(
-        model_acc, test_loader, loss_function, device, strategy=strategy_acc
+        model_acc,
+        test_loader,
+        loss_function,
+        device,
+        strategy=strategy_acc,
+        is_test=True,
+        wandb_logger=wandb_logger,
     )
 
     strategy_loss = make_strategy(cfg)
     strategy_loss.setup_for_eval(model_loss)
     test_loss_l, test_accuracy_l = _evaluate(
-        model_loss, test_loader, loss_function, device, strategy=strategy_loss
+        model_loss,
+        test_loader,
+        loss_function,
+        device,
+        strategy=strategy_loss,
+        is_test=False,
+        wandb_logger=wandb_logger,
     )
 
     log.info(

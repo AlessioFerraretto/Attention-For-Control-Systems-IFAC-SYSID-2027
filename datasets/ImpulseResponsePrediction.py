@@ -72,4 +72,27 @@ class ImpulseResponsePrediction(Dataset):
 
         target = g
 
-        return input, target
+        # Build the info for the evaluation of the estimators
+
+        # 1. Exact reconstruction of the noise variance.
+        # Given that y = y_0 + e, and SNR = Var(y_0) / Var(e),
+        # we can derive: Var(e) = Var(y) / (SNR + 1.0)
+        snr = sample["eta"]["snr"]
+        var_y = torch.var(y, unbiased=False)
+        noise_variance = var_y / (snr + 1.0)
+
+        # 2. Reconstruction of the TC Kernel Matrix
+        # K(k,j) = c * alpha^max(k,j)
+        k_idx = torch.arange(1, self.g_length + 1)
+        max_indices = torch.maximum(k_idx[:, None], k_idx)
+        kernel_matrix = self.c * (self.alpha**max_indices)
+
+        info = {
+            "u": u,
+            "y": y,
+            "noise_variance": noise_variance,
+            "kernel_matrix": kernel_matrix,
+            "g_length": self.g_length,
+        }
+
+        return input, target, info
