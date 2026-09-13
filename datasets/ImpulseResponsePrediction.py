@@ -30,8 +30,7 @@ class ImpulseResponsePrediction(Dataset):
         )
         self.padding = cfg.dataset.padding
         self.input_dim = cfg.model.input_dim
-        self.low_pass_cutoff = cfg.dataset.low_pass_cutoff
-        self.low_pass_cutoff_order = cfg.dataset.low_pass_cutoff_order
+        self.a_param = cfg.dataset.a_param
 
     def __len__(self):
         return self.batches_per_epoch * self.batch_size
@@ -47,8 +46,7 @@ class ImpulseResponsePrediction(Dataset):
             self.snr_min,
             self.snr_max,
             self.jitter_regularization_parameter,
-            self.low_pass_cutoff,
-            self.low_pass_cutoff_order,
+            self.a_param,
         )
 
         # Splitting
@@ -71,6 +69,16 @@ class ImpulseResponsePrediction(Dataset):
         input = torch.cat([uy, padding_tensor], dim=0)
 
         target = g
+
+        # Build the mask
+
+        mask = torch.cat(
+            [
+                torch.zeros(u.shape[0], dtype=torch.bool),
+                torch.ones(self.g_length, dtype=torch.bool),
+            ],
+            dim=0,
+        )
 
         # Build the info for the evaluation of the estimators
 
@@ -95,4 +103,4 @@ class ImpulseResponsePrediction(Dataset):
             "g_length": self.g_length,
         }
 
-        return input, target, info
+        return input, target, info, mask

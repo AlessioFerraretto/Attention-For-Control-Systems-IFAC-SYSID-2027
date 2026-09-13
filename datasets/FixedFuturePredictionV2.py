@@ -52,8 +52,7 @@ class FixedFuturePredictionV2(Dataset):
             self.n,
             self.snr_min,
             self.snr_max,
-            self.low_pass_cutoff,
-            self.low_pass_cutoff_order,
+            self.a_param,
         )
 
         padding_tensor = torch.full(

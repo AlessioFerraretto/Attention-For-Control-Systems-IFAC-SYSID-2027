@@ -233,16 +233,16 @@ def training(
             continue
 
         # Save checkpoint
-        model_path = checkpoints_dir / f"model_{epoch}_{val_loss:.5f}_{fit:.3f}.pt"
-        torch.save(
-            obj={
-                "model_state_dict": model.state_dict(),
-                "optimizer_state_dict": opt.state_dict(),
-                "loss": val_loss,
-                "accuracy": fit,
-            },
-            f=model_path,
-        )
+        # model_path = checkpoints_dir / f"model_{epoch}_{val_loss:.5f}_{fit:.3f}.pt"
+        # torch.save(
+        #    obj={
+        #        "model_state_dict": model.state_dict(),
+        #        "optimizer_state_dict": opt.state_dict(),
+        #        "loss": val_loss,
+        #        "accuracy": fit,
+        #    },
+        #    f=model_path,
+        # )
 
         # Save best model in terms of accuracy (override the previous one)
         if fit > best_fit:

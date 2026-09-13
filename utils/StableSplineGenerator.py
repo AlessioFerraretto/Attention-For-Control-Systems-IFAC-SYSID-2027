@@ -35,7 +35,7 @@ def sample_system_impulse_response(g_length, c, alpha, jitter_regularization_par
     return g, {"c": c, "alpha": alpha}
 
 
-def simulate_io_data(g, n, snr_min, snr_max, low_pass_cutoff, low_pass_cutoff_order):
+def simulate_io_data(g, n, snr_min, snr_max, a_param):
     """Simulate input 'u' and noisy output 'y' given a fixed impulse response 'g'.
 
     Call this multiple times (e.g., in Dataset __getitem__) to generate
@@ -44,17 +44,28 @@ def simulate_io_data(g, n, snr_min, snr_max, low_pass_cutoff, low_pass_cutoff_or
     g_length = len(g)
 
     # Generate input sequence u_t
-    if low_pass_cutoff is not None:
+    if a_param is not None:
         # Generate white noise with NumPy
         u_white = np.random.randn(n)
 
-        # Design a Butterworth low-pass filter (order 4 is a good default)
-        # btype='low' specifies a low-pass filter
-        b, a = signal.butter(
-            N=low_pass_cutoff_order, Wn=low_pass_cutoff, btype="low", analog=False
+        # Define continuous-time transfer funcsimulate_io_datation H(s) = 1 / (s - a_param)
+        num = [1.0]
+        den = [1.0, -a_param]
+
+        # Convert to discrete-time using the bilinear transform
+        # dt is the sampling period.
+        dt = 1.0
+        b_discrete, a_discrete, _ = signal.cont2discrete(
+            (num, den), dt, method="bilinear"
         )
 
-        # Apply filtfilt for zero-phase filtering (prevents phase shifting the input)
+        # Extract the discrete filter coefficients
+        b = b_discrete[0]
+        a = a_discrete[0]
+
+        # Apply the filter
+        # (Using filtfilt keeps it zero-phase like your original code.
+        #  If you want a causal, real-time filter instead, use signal.lfilter)
         u_filtered = signal.filtfilt(b, a, u_white)
 
         # Convert back to a PyTorch tensor
@@ -90,8 +101,7 @@ def generate_stable_spline(
     snr_min,
     snr_max,
     jitter_regularization_parameter,
-    low_pass_cutoff,
-    low_pass_cutoff_order,
+    a_param,
 ):
     """Generate a synthetic system identification problem.
 
@@ -105,9 +115,7 @@ def generate_stable_spline(
     )
 
     # 2. Simulate a single trajectory of length n
-    u, y, snr = simulate_io_data(
-        g, n, snr_min, snr_max, low_pass_cutoff, low_pass_cutoff_order
-    )
+    u, y, snr = simulate_io_data(g, n, snr_min, snr_max, a_param)
 
     # 3. Split the sequences into past and future
     u_past = u[:n_past]

@@ -2,7 +2,7 @@
 
 seed: null
 
-epochs: 5
+epochs: 50
 learning_rate: 1e-3
 eval_every: 1
 
@@ -18,7 +18,7 @@ model:
   model_name: transformer # Name of the layer used
   embedding: transformer-positional-encoding # Embedding type
   layer_name: transformer-encoder-layer # Name of the layer used
-  out_layer: mlp-classifier-for-impulse-response-prediction # Output layer type
+  out_layer: token-wise-readout-for-impulse-response-prediction # Output layer type
   num_layers: 4
 
   # Layer parameters
@@ -30,9 +30,9 @@ model:
   dropout: 0.1
 
   # Only for out_layer = mlp-classifier
-  input_dim_classifier: "${mul: ${dataset.g_length}, ${model.output_dim} }" # Input dimension of the classifier = g_length * output_dim
-  hidden_dim_classifier: "${div: ${model.input_dim_classifier}, 2 }" # Hidden dimension of the classifier = input_dim_classifier/2
-  output_dim_classifier: ${dataset.g_length} # Output dimension of the classifier = g_length
+  input_dim_classifier: "${model.output_dim}" # Input dimension of the classifier = output_dim
+  hidden_dim_classifier: "${model.output_dim}" # Hidden dimension of the classifier = output_dim
+  output_dim_classifier: 1 # Output dimension of the classifier = 1
   out_bias1_classifier: True # Biases of classifier hidden layer and out layer
   out_bias2_classifier: True # Biases of classifier hidden layer and out layer
 
@@ -63,8 +63,7 @@ dataset:
   jitter_regularization_parameter: 0.00001
 
   padding: 0
-  low_pass_cutoff: null
-  low_pass_cutoff_order: -1
+  a_param: -3
 
   out_dir_name: "impulse-response-prediction"
 

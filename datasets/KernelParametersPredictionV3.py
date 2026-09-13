@@ -34,8 +34,7 @@ class KernelParametersPredictionV3(Dataset):
         )
         self.padding = cfg.dataset.padding
         self.input_dim = cfg.model.input_dim
-        self.low_pass_cutoff = cfg.dataset.low_pass_cutoff
-        self.low_pass_cutoff_order = cfg.dataset.low_pass_cutoff_order
+        self.a_param = cfg.dataset.a_param
 
     def __len__(self):
         return self.batches_per_epoch * self.batch_size
@@ -56,8 +55,7 @@ class KernelParametersPredictionV3(Dataset):
             self.snr_min,
             self.snr_max,
             self.jitter_regularization_parameter,
-            self.low_pass_cutoff,
-            self.low_pass_cutoff_order,
+            self.a_param,
         )
 
         g = sample["g"]

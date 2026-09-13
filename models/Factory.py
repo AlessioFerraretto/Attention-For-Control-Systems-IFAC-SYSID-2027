@@ -38,6 +38,9 @@ from models.output_layers.MLPClassifierForKernelParametersPredictionV4 import (
 from models.output_layers.MLPClassifierForKernelParametersPredictionV5 import (
     MLPClassifierForKernelParametersPredictionV5,
 )
+from models.output_layers.TokenWiseReadoutForImpulseResponsePrediction import (
+    TokenWiseReadoutForImpulseResponse,
+)
 from models.TransformerEncoderLayer import TransformerEncoderLayer
 from models.TransformerFinalLayer import TransformerFinalLayer
 
@@ -191,6 +194,11 @@ def _get_output_module(cfg, device: torch.device) -> nn.Module:
         )
     elif cfg.model.out_layer == "mlp-classifier-for-kernel-parameters-prediction-v5":
         return MLPClassifierForKernelParametersPredictionV5(
+            cfg=cfg,
+            device=device,
+        )
+    elif cfg.model.out_layer == "token-wise-readout-for-impulse-response-prediction":
+        return TokenWiseReadoutForImpulseResponse(
             cfg=cfg,
             device=device,
         )
