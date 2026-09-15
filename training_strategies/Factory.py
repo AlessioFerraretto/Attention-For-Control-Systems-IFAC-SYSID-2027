@@ -9,6 +9,7 @@ TASKS = {
     "dynamic-future-prediction-v2": FuturePrediction,
     "dynamic-future-prediction-v3": FuturePrediction,
     "impulse-response-prediction": FuturePrediction,
+    "dynamic-impulse-response-prediction": FuturePrediction,
     "kernel-parameters-prediction": FuturePrediction,
     "kernel-parameters-prediction-v2": FuturePrediction,
     "kernel-parameters-prediction-v3": FuturePrediction,

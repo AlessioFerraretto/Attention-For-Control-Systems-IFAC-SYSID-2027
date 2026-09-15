@@ -73,6 +73,11 @@ def main(cfg: DictConfig):
 
     train_loader, val_loader, test_loader = get_data_loaders(cfg=cfg)
 
+    average_fit_ls, average_fit_mmse = compute_ls_mmse(
+        test_loader,
+        device,
+    )
+
     training(
         cfg=cfg,
         base_dir=base_dir,
@@ -80,6 +85,7 @@ def main(cfg: DictConfig):
         wandb_logger=wandb_logger,
         train_loader=train_loader,
         val_loader=val_loader,
+        average_fit_mmse=average_fit_mmse,
     )
     test(
         cfg=cfg,
@@ -97,6 +103,7 @@ def training(
     wandb_logger: WandDBLogger,
     train_loader: DataLoader,
     val_loader: DataLoader,
+    average_fit_mmse: float,
 ):
     """Train the configured model using provided data loaders.
 
@@ -206,13 +213,12 @@ def training(
             loss_function,
             device,
             strategy=strategy,
-            is_test=False,
             wandb_logger=wandb_logger,
         )
 
         log.info(f"Validation Loss: {val_loss:.5f}, FIT: {fit:.3f}")
 
-        # ------------------------VISUALIZATION PHASE-----------------------------------------
+        # ------------------------VISUALIZATION PHASE-----------------------------------
         if epoch % cfg.eval_every == 0:
             log.info(f"Running model evaluation at epoch {epoch}...")
             try:
@@ -227,22 +233,31 @@ def training(
             except Exception as e:
                 log.error(f"Evaluation failed: {e}")
 
+        # ------------------------EARLY STOPPING-------------------------------
+        # Once the task is essentially solved on the independent validation set,
+        # there is no value in running the remaining epochs.
+        if fit >= 100:
+            log.info(
+                f"Early stopping"
+                f">= threshold at epoch {epoch}. "
+                f"Skipping the remaining {cfg.epochs - epoch} epoch(s)."
+            )
+            break
+
         # ------------------------SAVE PHASE-----------------------------------------
 
-        if not cfg.save_model:
-            continue
-
         # Save checkpoint
-        # model_path = checkpoints_dir / f"model_{epoch}_{val_loss:.5f}_{fit:.3f}.pt"
-        # torch.save(
-        #    obj={
-        #        "model_state_dict": model.state_dict(),
-        #        "optimizer_state_dict": opt.state_dict(),
-        #        "loss": val_loss,
-        #        "accuracy": fit,
-        #    },
-        #    f=model_path,
-        # )
+        if cfg.save_checkpoints:
+            model_path = checkpoints_dir / f"model_{epoch}_{val_loss:.5f}_{fit:.3f}.pt"
+            torch.save(
+                obj={
+                    "model_state_dict": model.state_dict(),
+                    "optimizer_state_dict": opt.state_dict(),
+                    "loss": val_loss,
+                    "accuracy": fit,
+                },
+                f=model_path,
+            )
 
         # Save best model in terms of accuracy (override the previous one)
         if fit > best_fit:
@@ -267,17 +282,6 @@ def training(
                 loss=val_loss,
                 accuracy=fit,
             )
-
-        # ------------------------EARLY STOPPING-------------------------------
-        # Once the task is essentially solved on the independent validation set,
-        # there is no value in running the remaining epochs.
-        if fit >= 100:
-            log.info(
-                f"Early stopping"
-                f">= threshold at epoch {epoch}. "
-                f"Skipping the remaining {cfg.epochs - epoch} epoch(s)."
-            )
-            break
 
     log.info("Training complete.")
 
@@ -323,18 +327,50 @@ def save_best_model(
     )
 
 
-def _evaluate(
-    model, loader, loss_fn, device, strategy=None, is_test=False, wandb_logger=None
-):
+def compute_ls_mmse(test_loader: DataLoader, device: torch.device):
+
+    total = 0
+    total_fit_ls = 0.0
+    total_fit_mmse = 0.0
+
+    for inputs, targets, info, *rest in test_loader:
+        batch_size = inputs.size(0)
+
+        u_batch = info["u"].to(device)
+        y_batch = info["y"].to(device)
+        noise_var_batch = info["noise_variance"].to(device)
+        kernel_matrix_batch = info["kernel_matrix"].to(device)
+        g_true_batch = targets.to(device)
+
+        _, fit_ls_batch = compute_ls(
+            u_batch, y_batch, g_true_batch, test_loader.dataset.g_length
+        )
+        _, fit_mmse_batch = compute_mmse(
+            u_batch, y_batch, g_true_batch, noise_var_batch, kernel_matrix_batch
+        )
+
+        total_fit_ls += fit_ls_batch.sum().item()
+        total_fit_mmse += fit_mmse_batch.sum().item()
+
+        total += batch_size
+
+    average_fit_ls = total_fit_ls / max(total, 1)
+    average_fit_mmse = total_fit_mmse / max(total, 1)
+
+    log.info("Evaluation LS and MMSE on the test set")
+    log.info(f"LS FIT: {average_fit_ls:.3f}")
+    log.info(f"MMSE FIT: {average_fit_mmse:.3f}")
+
+    return average_fit_ls, average_fit_mmse
+
+
+def _evaluate(model, loader, loss_fn, device, strategy=None, wandb_logger=None):
     strategy.enter_eval(model) if strategy else None
     model.eval()
 
     total_loss = 0.0
     fit = 0
     total = 0
-
-    total_fit_ls = 0.0
-    total_fit_mmse = 0.0
 
     with torch.no_grad():
         for inputs, targets, info, *rest in loader:
@@ -352,42 +388,12 @@ def _evaluate(
             performance_metrics = strategy.compute_metrics(preds, targets)
             fit += performance_metrics["fit"] * batch_size
 
-            if is_test and info is not None:
-                u_batch = info["u"].to(device)
-                y_batch = info["y"].to(device)
-                noise_var_batch = info["noise_variance"].to(device)
-                kernel_matrix_batch = info["kernel_matrix"].to(device)
-                g_true_batch = targets
-
-                _, fit_ls_batch = compute_ls(
-                    u_batch, y_batch, g_true_batch, loader.dataset.g_length
-                )
-                _, fit_mmse_batch = compute_mmse(
-                    u_batch, y_batch, g_true_batch, noise_var_batch, kernel_matrix_batch
-                )
-
-                total_fit_ls += fit_ls_batch.sum().item()
-                total_fit_mmse += fit_mmse_batch.sum().item()
-
             total += batch_size
 
     strategy.exit_eval(model) if strategy else None
 
     avg_loss = total_loss / max(total, 1)
     avg_fit = fit / max(total, 1)
-
-    if is_test:
-        average_fit_ls = total_fit_ls / max(total, 1)
-        average_fit_mmse = total_fit_mmse / max(total, 1)
-
-        log.info("Evaluation LS and MMSE on the test set")
-        log.info(f"LS FIT: {average_fit_ls:.3f}")
-        log.info(f"MMSE FIT: {average_fit_mmse:.3f}")
-
-        if wandb_logger:
-            wandb_logger.log(
-                {"test/fit_ls": average_fit_ls, "test/fit_mmse": average_fit_mmse}
-            )
 
     return avg_loss, avg_fit
 
@@ -453,35 +459,36 @@ def test(
 
     strategy_acc = make_strategy(cfg)
     strategy_acc.setup_for_eval(model_acc)
-    test_loss_a, test_accuracy_a = _evaluate(
+    test_loss_a, test_fit_a = _evaluate(
         model_acc,
         test_loader,
         loss_function,
         device,
         strategy=strategy_acc,
-        is_test=True,
         wandb_logger=wandb_logger,
     )
 
     strategy_loss = make_strategy(cfg)
     strategy_loss.setup_for_eval(model_loss)
-    test_loss_l, test_accuracy_l = _evaluate(
+    test_loss_l, test_fit_l = _evaluate(
         model_loss,
         test_loader,
         loss_function,
         device,
         strategy=strategy_loss,
-        is_test=False,
         wandb_logger=wandb_logger,
     )
 
     log.info(
-        f"Best Model (by Accuracy) - Loss: {test_loss_a:.5f}, Accuracy: {test_accuracy_a:.3f}"
+        f"Best Model (by Accuracy) - Loss: {test_loss_a:.5f}, FIT: {test_fit_a:.3f}"
     )
 
-    log.info(
-        f"Best Model (by Loss) - Loss: {test_loss_l:.5f}, Accuracy: {test_accuracy_l:.3f}"
-    )
+    log.info(f"Best Model (by Loss) - Loss: {test_loss_l:.5f}, FIT: {test_fit_l:.3f}")
+
+    if not cfg.save_model:
+        acc_file[0].unlink(missing_ok=True)
+        loss_file[0].unlink(missing_ok=True)
+        log.info("Deleted best model checkpoints.")
 
 
 if __name__ == "__main__":
