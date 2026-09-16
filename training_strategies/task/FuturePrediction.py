@@ -2,11 +2,13 @@ from collections.abc import Callable
 
 import torch
 
+from models.ScaleInvariantLoss import ScaleInvariantLoss
+
 
 class FuturePrediction:
     def loss_fn(self) -> Callable:
-        # return torch.nn.CrossEntropyLoss()
-        return torch.nn.MSELoss()  # TODO: Check if this is correct
+        # return torch.nn.MSELoss()
+        return ScaleInvariantLoss()
 
     def compute_metrics(self, predictions, targets):
         """
