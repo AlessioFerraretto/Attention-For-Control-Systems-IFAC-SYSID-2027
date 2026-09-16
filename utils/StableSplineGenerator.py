@@ -5,10 +5,11 @@ kernels and synthetic input-output datasets using a first-order stable spline
 (TC) prior.
 """
 
-import numpy as np
 import scipy.signal as signal
 import torch
 import torch.nn.functional as F
+
+from utils.SeedManager import SeedManager
 
 
 def generate_stable_spline_kernel(impulse_length, c, alpha):
@@ -27,10 +28,7 @@ def sample_system_impulse_response(g_length, c, alpha, jitter_regularization_par
     K_eta = generate_stable_spline_kernel(g_length, c, alpha)
     jitter = torch.eye(g_length) * jitter_regularization_parameter
 
-    mvn = torch.distributions.MultivariateNormal(
-        loc=torch.zeros(g_length), covariance_matrix=K_eta + jitter
-    )
-    g = mvn.sample()
+    g = SeedManager().dataset_multivariate_normal(K_eta + jitter)
 
     return g, {"c": c, "alpha": alpha}
 
@@ -46,7 +44,7 @@ def simulate_io_data(g, n, snr_min, snr_max, a_param):
     # Generate input sequence u_t
     if a_param is not None:
         # Generate white noise with NumPy
-        u_white = np.random.randn(n)
+        u_white = SeedManager().dataset_numpy_randn(n)
 
         # Define continuous-time transfer funcsimulate_io_datation H(s) = 1 / (s - a_param)
         num = [1.0]
@@ -71,7 +69,7 @@ def simulate_io_data(g, n, snr_min, snr_max, a_param):
         # Convert back to a PyTorch tensor
         u = torch.tensor(u_filtered.copy(), dtype=torch.float)
     else:
-        u = torch.randn(n)
+        u = SeedManager().dataset_randn(n)
 
     # Compute noise-free output y^0 using convolution
     u_reshaped = u.view(1, 1, n)
@@ -82,10 +80,10 @@ def simulate_io_data(g, n, snr_min, snr_max, a_param):
 
     # Add measurement noise e_t
     # SNR is defined as the variance ratio: Var(y0) / Var(noise)
-    snr = (snr_max - snr_min) * torch.rand(1).item() + snr_min
+    snr = (snr_max - snr_min) * SeedManager().dataset_rand(1).item() + snr_min
 
     noise_variance = torch.var(y0, unbiased=False) / snr
-    e = torch.randn(n) * torch.sqrt(noise_variance)
+    e = SeedManager().dataset_randn(n) * torch.sqrt(noise_variance)
 
     y = y0 + e
 

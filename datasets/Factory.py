@@ -23,6 +23,7 @@ from datasets.KernelParametersPredictionV2 import KernelParametersPredictionV2
 from datasets.KernelParametersPredictionV3 import KernelParametersPredictionV3
 from datasets.KernelParametersPredictionV4 import KernelParametersPredictionV4
 from datasets.KernelParametersPredictionV5 import KernelParametersPredictionV5
+from utils.SeedManager import SeedManager, seed_data_worker
 
 logger = logging.getLogger(__name__)
 
@@ -49,12 +50,26 @@ def get_data_loaders(cfg) -> tuple[DataLoader, DataLoader, DataLoader]:
 
     logger.info(f"Retrieving '{cfg.dataset.name}'")
 
-    fixed_alpha = (cfg.dataset.alpha_max - cfg.dataset.alpha_min) * torch.rand(
-        1
-    ).item() + cfg.dataset.alpha_min
-    fixed_c = (cfg.dataset.c_max - cfg.dataset.c_min) * torch.rand(
+    fixed_alpha = (
+        cfg.dataset.alpha_max - cfg.dataset.alpha_min
+    ) * SeedManager().dataset_rand(1).item() + cfg.dataset.alpha_min
+    fixed_c = (cfg.dataset.c_max - cfg.dataset.c_min) * SeedManager().dataset_rand(
         1
     ).item() + cfg.dataset.c_min
+
+    if cfg.data_seed is not None:
+        loader_generators = (
+            SeedManager().make_data_loader_generator(cfg.data_seed + offset)
+            for offset in (0, 1, 2)
+        )
+        train_generator, validation_generator, test_generator = loader_generators
+
+        loader_kwargs = {
+            "worker_init_fn": seed_data_worker,
+        }
+    else:
+        train_generator = validation_generator = test_generator = None
+        loader_kwargs = {}
 
     if cfg.dataset.name == "fixed-future-prediction-v1":
         train_dataset = FixedFuturePredictionV1(
@@ -206,7 +221,10 @@ def get_data_loaders(cfg) -> tuple[DataLoader, DataLoader, DataLoader]:
             f"Dataset '{cfg.dataset.name}' is not implemented yet."
         )
 
-    mp_context = torch.multiprocessing.get_context("spawn")
+    if cfg.num_workers > 0:
+        loader_kwargs["multiprocessing_context"] = torch.multiprocessing.get_context(
+            "spawn"
+        )
 
     # Initialize PyTorch DataLoaders for all splits
     train_loader = DataLoader(
@@ -215,7 +233,8 @@ def get_data_loaders(cfg) -> tuple[DataLoader, DataLoader, DataLoader]:
         num_workers=cfg.num_workers,
         shuffle=cfg.dataset.shuffle,
         pin_memory=False,
-        multiprocessing_context=mp_context,
+        generator=train_generator,
+        **loader_kwargs,
     )
     validation_loader = DataLoader(
         validation_dataset,
@@ -223,7 +242,8 @@ def get_data_loaders(cfg) -> tuple[DataLoader, DataLoader, DataLoader]:
         num_workers=cfg.num_workers,
         shuffle=cfg.dataset.shuffle,
         pin_memory=False,
-        multiprocessing_context=mp_context,
+        generator=validation_generator,
+        **loader_kwargs,
     )
     test_loader = DataLoader(
         test_dataset,
@@ -231,7 +251,8 @@ def get_data_loaders(cfg) -> tuple[DataLoader, DataLoader, DataLoader]:
         num_workers=cfg.num_workers,
         shuffle=cfg.dataset.shuffle,
         pin_memory=False,
-        multiprocessing_context=mp_context,
+        generator=test_generator,
+        **loader_kwargs,
     )
 
     return train_loader, validation_loader, test_loader

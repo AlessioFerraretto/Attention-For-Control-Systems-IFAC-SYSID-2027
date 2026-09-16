@@ -1,7 +1,9 @@
 project_name: "Attention for Control Systems"
 
 num_workers: 4
-seed: null
+# Separate seeds keep synthetic data and transformer initialization independent.
+transformer_seed: null
+data_seed: null
 debug_every: 10
 
 defaults:

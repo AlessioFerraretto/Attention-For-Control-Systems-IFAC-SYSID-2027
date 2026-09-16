@@ -8,6 +8,7 @@ The generator output is of the form [[u],[y]] -> [alpha,c].
 import torch
 from torch.utils.data import Dataset
 
+from utils.SeedManager import SeedManager
 from utils.StableSplineGenerator import (
     generate_stable_spline,
 )
@@ -41,10 +42,12 @@ class KernelParametersPredictionV4(Dataset):
 
     def __getitem__(self, idx):
         # Generate (alpha, c) with which to generate (g) using the fixed system (c, alpha)
-        alpha = (self.alpha_max - self.alpha_min) * torch.rand(
+        alpha = (self.alpha_max - self.alpha_min) * SeedManager().dataset_rand(
             1
         ).item() + self.alpha_min
-        c = (self.c_max - self.c_min) * torch.rand(1).item() + self.c_min
+        c = (self.c_max - self.c_min) * SeedManager().dataset_rand(
+            1
+        ).item() + self.c_min
 
         sample = generate_stable_spline(
             self.g_length,

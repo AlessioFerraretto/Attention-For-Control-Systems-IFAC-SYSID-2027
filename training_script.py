@@ -36,6 +36,7 @@ from monitor.WandDBLogger import WandDBLogger
 from training_strategies.Factory import make_strategy
 from utils.Environment import get_job_id, get_torch_device
 from utils.Estimators import compute_ls, compute_mmse
+from utils.SeedManager import SeedManager
 
 log = logging.getLogger("script")
 
@@ -60,16 +61,16 @@ def main(cfg: DictConfig):
         None: Orchestrates training and testing workflow and persists artifacts.
     """
 
+    seed_manager = SeedManager()
+    seed_manager.seed_dataset(cfg.data_seed)
+    seed_manager.seed_transformer(cfg.transformer_seed)
+
     wandb_logger = WandDBLogger(cfg)
 
     base_dir = Path(HydraConfig.get().runtime.output_dir)
     log.info(f"Results Directory: {base_dir}")
 
     device = get_torch_device()
-
-    if cfg.seed:
-        log.info(f"Fixing PRNG seed: {cfg.seed}")
-        torch.manual_seed(seed=cfg.seed)
 
     train_loader, val_loader, test_loader = get_data_loaders(cfg=cfg)
 
@@ -453,12 +454,10 @@ def test(
     model_acc.load_state_dict(best_acc["model_state_dict"])
     model_loss.load_state_dict(best_loss["model_state_dict"])
 
-    # TODO: why is the loss function here instead of reading the one from the strategy?
-    # loss_function = torch.nn.CrossEntropyLoss()
-    loss_function = torch.nn.MSELoss()  # TODO: Check if this is correct
-
     strategy_acc = make_strategy(cfg)
     strategy_acc.setup_for_eval(model_acc)
+    loss_function = strategy_acc.loss_fn()
+
     test_loss_a, test_fit_a = _evaluate(
         model_acc,
         test_loader,
