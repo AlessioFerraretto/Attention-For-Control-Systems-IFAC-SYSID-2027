@@ -8,6 +8,7 @@ The generator output is of the form [[u],[y]] -> [g].
 import torch
 from torch.utils.data import Dataset
 
+from utils.SeedManager import SeedManager
 from utils.StableSplineGenerator import generate_stable_spline
 
 
@@ -39,8 +40,12 @@ class DynamicImpulseResponsePrediction(Dataset):
 
     def __getitem__(self, idx):
 
-        c = (self.c_max - self.c_min) * torch.rand(1).item() + self.c_min
-        alpha = (self.alpha_max - self.alpha_min) * torch.rand(
+        c = (
+            SeedManager().dataset_rand(1).item() * (self.c_max - self.c_min)
+            + self.c_min
+        )
+
+        alpha = (self.alpha_max - self.alpha_min) * SeedManager().dataset_rand(
             1
         ).item() + self.alpha_min
 
