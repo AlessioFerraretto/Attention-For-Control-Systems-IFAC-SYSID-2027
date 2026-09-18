@@ -74,11 +74,6 @@ def main(cfg: DictConfig):
 
     train_loader, val_loader, test_loader = get_data_loaders(cfg=cfg)
 
-    average_fit_ls, average_fit_mmse = compute_ls_mmse(
-        test_loader,
-        device,
-    )
-
     training(
         cfg=cfg,
         base_dir=base_dir,
@@ -86,7 +81,6 @@ def main(cfg: DictConfig):
         wandb_logger=wandb_logger,
         train_loader=train_loader,
         val_loader=val_loader,
-        average_fit_mmse=average_fit_mmse,
     )
     test(
         cfg=cfg,
@@ -104,7 +98,6 @@ def training(
     wandb_logger: WandDBLogger,
     train_loader: DataLoader,
     val_loader: DataLoader,
-    average_fit_mmse: float,
 ):
     """Train the configured model using provided data loaders.
 
@@ -328,32 +321,58 @@ def save_best_model(
     )
 
 
-def compute_ls_mmse(test_loader: DataLoader, device: torch.device):
+def compute_ls_mmse(
+    test_loader: DataLoader,
+    device: torch.device,
+    model_acc: nn.Module,
+    model_loss: nn.Module,
+    base_dir: Path,
+):
 
     total = 0
     total_fit_ls = 0.0
     total_fit_mmse = 0.0
+    to_save = {
+        "true_impulse_response": [],
+        "ls_estimate": [],
+        "mmse_estimate": [],
+        "model_best_accuracy": [],
+        "model_best_loss": [],
+        "best_order": [],
+    }
 
-    for inputs, targets, info, *rest in test_loader:
-        batch_size = inputs.size(0)
+    model_acc.eval()
+    model_loss.eval()
+    with torch.no_grad():
+        for inputs, targets, info, *rest in test_loader:
+            batch_size = inputs.size(0)
 
-        u_batch = info["u"].to(device)
-        y_batch = info["y"].to(device)
-        noise_var_batch = info["noise_variance"].to(device)
-        kernel_matrix_batch = info["kernel_matrix"].to(device)
-        g_true_batch = targets.to(device)
+            u_batch = info["u"].to(device)
+            y_batch = info["y"].to(device)
+            noise_var_batch = info["noise_variance"].to(device)
+            kernel_matrix_batch = info["kernel_matrix"].to(device)
+            g_true_batch = targets.to(device)
+            masks = rest[0].to(device) if rest else None
 
-        _, fit_ls_batch = compute_ls(
-            u_batch, y_batch, g_true_batch, test_loader.dataset.g_length
-        )
-        _, fit_mmse_batch = compute_mmse(
-            u_batch, y_batch, g_true_batch, noise_var_batch, kernel_matrix_batch
-        )
+            ls_estimate, fit_ls_batch, best_order = compute_ls(
+                u_batch, y_batch, g_true_batch, test_loader.dataset.g_length
+            )
+            mmse_estimate, fit_mmse_batch = compute_mmse(
+                u_batch, y_batch, g_true_batch, noise_var_batch, kernel_matrix_batch
+            )
+            model_acc_estimate, _ = model_acc(inputs.to(device), masks)
+            model_loss_estimate, _ = model_loss(inputs.to(device), masks)
 
-        total_fit_ls += fit_ls_batch.sum().item()
-        total_fit_mmse += fit_mmse_batch.sum().item()
+            total_fit_ls += fit_ls_batch.sum().item()
+            total_fit_mmse += fit_mmse_batch.sum().item()
+            total += batch_size
 
-        total += batch_size
+            to_save["true_impulse_response"].append(g_true_batch.cpu())
+            to_save["ls_estimate"].append(ls_estimate.cpu())
+            to_save["mmse_estimate"].append(mmse_estimate.cpu())
+            to_save["model_best_accuracy"].append(model_acc_estimate.cpu())
+            to_save["model_best_loss"].append(model_loss_estimate.cpu())
+            to_save["best_order"].append(best_order.cpu())
 
     average_fit_ls = total_fit_ls / max(total, 1)
     average_fit_mmse = total_fit_mmse / max(total, 1)
@@ -361,6 +380,11 @@ def compute_ls_mmse(test_loader: DataLoader, device: torch.device):
     log.info("Evaluation LS and MMSE on the test set")
     log.info(f"LS FIT: {average_fit_ls:.3f}")
     log.info(f"MMSE FIT: {average_fit_mmse:.3f}")
+
+    torch.save(
+        {key: torch.cat(value) for key, value in to_save.items()},
+        base_dir / "test_impulse_responses.pt",
+    )
 
     return average_fit_ls, average_fit_mmse
 
@@ -484,10 +508,18 @@ def test(
 
     log.info(f"Best Model (by Loss) - Loss: {test_loss_l:.5f}, FIT: {test_fit_l:.3f}")
 
+    compute_ls_mmse(
+        test_loader=test_loader,
+        device=device,
+        model_acc=model_acc,
+        model_loss=model_loss,
+        base_dir=base_dir,
+    )
+
     if not cfg.save_model:
         acc_file[0].unlink(missing_ok=True)
         loss_file[0].unlink(missing_ok=True)
-        log.info("Deleted best model checkpoints.")
+        log.info("Deleted best models.")
 
 
 if __name__ == "__main__":

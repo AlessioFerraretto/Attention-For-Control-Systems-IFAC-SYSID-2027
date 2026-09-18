@@ -30,6 +30,12 @@ def compute_ls(
     """Computes the Least Squares Oracle for the entire batch simultaneously."""
     batch_size, sequence_length = input_batch.shape
     best_fit = torch.full((batch_size,), float("-inf"), device=input_batch.device)
+    best_order = torch.zeros(
+        (batch_size,), dtype=torch.int64, device=input_batch.device
+    )
+    best_estimate = torch.zeros(
+        (batch_size, max_length), dtype=input_batch.dtype, device=input_batch.device
+    )
 
     # Add a dimension to the output for matrix calculation: [batch_size, sequence_length, 1]
     output_vector = output_batch.unsqueeze(-1)
@@ -58,11 +64,16 @@ def compute_ls(
         norm_true_response = torch.linalg.vector_norm(true_impulse_batch, dim=-1)
         fit_metric = 100.0 * (1.0 - (norm_difference / (norm_true_response + 1e-8)))
 
-        # Updates best_fit by saving the maximum value element by element in the batch
-        best_fit = torch.maximum(best_fit, fit_metric)
+        is_better = fit_metric > best_fit
+        best_fit = torch.where(is_better, fit_metric, best_fit)
+        best_estimate = torch.where(
+            is_better.unsqueeze(-1), padded_estimate, best_estimate
+        )
+        best_order = torch.where(
+            is_better, torch.full_like(best_order, horizon), best_order
+        )
 
-    # Returns the tensor of best fits for the entire batch
-    return None, best_fit
+    return best_estimate, best_fit, best_order
 
 
 def compute_mmse(
@@ -119,4 +130,4 @@ def compute_mmse(
     norm_true_response = torch.linalg.vector_norm(true_impulse_batch, dim=-1)
     fit_metric = 100.0 * (1.0 - (norm_difference / (norm_true_response + 1e-8)))
 
-    return None, fit_metric
+    return estimated_impulse, fit_metric
