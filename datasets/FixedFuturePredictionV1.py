@@ -32,6 +32,8 @@ class FixedFuturePredictionV1(Dataset):
         )
         self.padding = cfg.dataset.padding
         self.input_dim = cfg.model.input_dim
+        self.filter_type = cfg.dataset.filter_type
+        self.a_param = cfg.dataset.a_param
         self.low_pass_cutoff = cfg.dataset.low_pass_cutoff
         self.low_pass_cutoff_order = cfg.dataset.low_pass_cutoff_order
 
@@ -55,6 +57,7 @@ class FixedFuturePredictionV1(Dataset):
             n_total,
             self.snr_min,
             self.snr_max,
+            self.filter_type,
             self.a_param,
         )
 

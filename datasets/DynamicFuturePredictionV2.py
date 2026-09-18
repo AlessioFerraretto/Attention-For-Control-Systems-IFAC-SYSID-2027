@@ -29,6 +29,7 @@ class DynamicFuturePredictionV2(Dataset):
             cfg.dataset.jitter_regularization_parameter
         )
         self.padding = cfg.dataset.padding
+        self.filter_type = cfg.dataset.filter_type
         self.a_param = cfg.dataset.a_param
 
     def __len__(self):
@@ -45,6 +46,7 @@ class DynamicFuturePredictionV2(Dataset):
             self.snr_min,
             self.snr_max,
             self.jitter_regularization_parameter,
+            self.filter_type,
             self.a_param,
         )
 

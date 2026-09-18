@@ -33,43 +33,54 @@ def sample_system_impulse_response(g_length, c, alpha, jitter_regularization_par
     return g, {"c": c, "alpha": alpha}
 
 
-def simulate_io_data(g, n, snr_min, snr_max, a_param):
+def simulate_io_data(g, n, snr_min, snr_max, filter_type, a_param):
     """Simulate input 'u' and noisy output 'y' given a fixed impulse response 'g'.
 
-    Call this multiple times (e.g., in Dataset __getitem__) to generate
-    different dynamic responses for the same physical system.
+    Parameters:
+        g: torch.Tensor, the true impulse response.
+        n: int, sequence length.
+        snr_min: float, minimum SNR for noise generation.
+        snr_max: float, maximum SNR for noise generation.
+        a_param: float, pole location for the low-pass filter (e.g., 0.9).
+        filter_type: str, type of input generation. Options:
+            - "white": standard white noise.
+            - "ar1": unnormalized AR(1) low-pass filter H(z) = 1 / (z - a).
+            - "ar1_normalized": unit static gain AR(1) filter H(z) = (1 - a) / (z - a).
     """
     g_length = len(g)
 
-    # Generate input sequence u_t
-    if a_param is not None:
-        # Generate white noise with NumPy
-        u_white = SeedManager().dataset_numpy_randn(n)
+    # 1. Generate input sequence
+    match filter_type:
+        case "white":
+            u = SeedManager().dataset_randn(n)
 
-        # Define continuous-time transfer funcsimulate_io_datation H(s) = 1 / (s - a_param)
-        num = [1.0]
-        den = [1.0, -a_param]
+        case "type_1":
+            if a_param is None:
+                raise ValueError("a_param must be provided for the 'type_1' filter.")
 
-        # Convert to discrete-time using the bilinear transform
-        # dt is the sampling period.
-        dt = 1.0
-        b_discrete, a_discrete, _ = signal.cont2discrete(
-            (num, den), dt, method="bilinear"
-        )
+            u_white = SeedManager().dataset_numpy_randn(n)
+            b_coeff = [0.0, 1.0]
+            a_coeff = [1.0, -a_param]
 
-        # Extract the discrete filter coefficients
-        b = b_discrete[0]
-        a = a_discrete[0]
+            u_filtered = signal.lfilter(b_coeff, a_coeff, u_white)
+            u = torch.tensor(u_filtered.copy(), dtype=torch.float)
 
-        # Apply the filter
-        # (Using filtfilt keeps it zero-phase like your original code.
-        #  If you want a causal, real-time filter instead, use signal.lfilter)
-        u_filtered = signal.filtfilt(b, a, u_white)
+        case "type_2":
+            if a_param is None:
+                raise ValueError("a_param must be provided for the 'type_2' filter.")
 
-        # Convert back to a PyTorch tensor
-        u = torch.tensor(u_filtered.copy(), dtype=torch.float)
-    else:
-        u = SeedManager().dataset_randn(n)
+            u_white = SeedManager().dataset_numpy_randn(n)
+            b_coeff = [0.0, 1.0 - a_param]
+            a_coeff = [1.0, -a_param]
+
+            u_filtered = signal.lfilter(b_coeff, a_coeff, u_white)
+            u = torch.tensor(u_filtered.copy(), dtype=torch.float)
+
+        case _:
+            raise ValueError(
+                f"Unknown filter_type: '{filter_type}'. "
+                "Choose 'white', 'type_1', or 'type_2'."
+            )
 
     # Compute noise-free output y^0 using convolution
     u_reshaped = u.view(1, 1, n)
@@ -99,6 +110,7 @@ def generate_stable_spline(
     snr_min,
     snr_max,
     jitter_regularization_parameter,
+    filter_type,
     a_param,
 ):
     """Generate a synthetic system identification problem.
@@ -113,7 +125,7 @@ def generate_stable_spline(
     )
 
     # 2. Simulate a single trajectory of length n
-    u, y, snr = simulate_io_data(g, n, snr_min, snr_max, a_param)
+    u, y, snr = simulate_io_data(g, n, snr_min, snr_max, filter_type, a_param)
 
     # 3. Split the sequences into past and future
     u_past = u[:n_past]

@@ -30,6 +30,7 @@ class ImpulseResponsePrediction(Dataset):
         )
         self.padding = cfg.dataset.padding
         self.input_dim = cfg.model.input_dim
+        self.filter_type = cfg.dataset.filter_type
         self.a_param = cfg.dataset.a_param
 
     def __len__(self):
@@ -46,6 +47,7 @@ class ImpulseResponsePrediction(Dataset):
             self.snr_min,
             self.snr_max,
             self.jitter_regularization_parameter,
+            self.filter_type,
             self.a_param,
         )
 
