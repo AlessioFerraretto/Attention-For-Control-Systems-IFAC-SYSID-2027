@@ -26,7 +26,6 @@ import torch
 from hydra.core.hydra_config import HydraConfig
 from omegaconf import DictConfig, OmegaConf
 from torch import nn
-from torch.optim import Optimizer
 from torch.utils.data import DataLoader
 
 from datasets.Factory import get_data_loaders
@@ -34,9 +33,11 @@ from evaluate import evaluate_model
 from models.Factory import construct_model
 from monitor.WandDBLogger import WandDBLogger
 from training_strategies.Factory import make_strategy
+from utils.CheckpointManager import CheckpointManager
 from utils.Environment import get_job_id, get_torch_device
 from utils.Estimators import compute_ls, compute_mmse
 from utils.SeedManager import SeedManager
+from utils.TestResultsManager import TestResultsManager
 
 log = logging.getLogger("script")
 
@@ -123,9 +124,7 @@ def training(
         f"In this experiment we have '{cfg.model.description}' trained on '{cfg.dataset.description}'"
     )
 
-    # ------------------------------------PREPARE DIRECTORIES------------------------------
-    checkpoints_dir = base_dir / "checkpoints"
-    checkpoints_dir.mkdir(exist_ok=True)
+    ckpt_manager = CheckpointManager(base_dir)
 
     # ------------------------------------STRATEGY AND MODEL----------------------------
     model = construct_model(cfg=cfg, device=device)
@@ -242,83 +241,19 @@ def training(
 
         # Save checkpoint
         if cfg.save_checkpoints:
-            model_path = checkpoints_dir / f"model_{epoch}_{val_loss:.5f}_{fit:.3f}.pt"
-            torch.save(
-                obj={
-                    "model_state_dict": model.state_dict(),
-                    "optimizer_state_dict": opt.state_dict(),
-                    "loss": val_loss,
-                    "accuracy": fit,
-                },
-                f=model_path,
-            )
+            ckpt_manager.save_checkpoint(epoch, model, opt, val_loss, fit)
 
         # Save best model in terms of accuracy (override the previous one)
         if fit > best_fit:
             best_fit = fit
-            save_best_model(
-                model,
-                criteria="acc",
-                base_dir=base_dir,
-                opt=opt,
-                loss=val_loss,
-                accuracy=fit,
-            )
+            ckpt_manager.save_best(model, "acc", opt, val_loss, fit)
 
         # Save best model in terms of loss
         if val_loss < best_val_loss:
             best_val_loss = val_loss
-            save_best_model(
-                model,
-                criteria="loss",
-                base_dir=base_dir,
-                opt=opt,
-                loss=val_loss,
-                accuracy=fit,
-            )
+            ckpt_manager.save_best(model, "loss", opt, val_loss, fit)
 
     log.info("Training complete.")
-
-
-def save_best_model(
-    model: nn.Module,
-    criteria: BestCriteria,
-    base_dir: Path,
-    opt: Optimizer,
-    loss: float,
-    accuracy: float,
-):
-    """Save the best model found so far according to the supplied criteria.
-
-    Parameters:
-        model : nn.Module
-            Model whose state dict will be saved.
-        criteria : BestCriteria
-            Criterion identifier, either 'acc' or 'loss'.
-        base_dir : Path
-            Directory where the best model file will be saved.
-        opt : Optimizer
-            Optimizer whose state is saved alongside the model.
-        loss : float
-            Validation loss associated with this checkpoint.
-        accuracy : float
-            Validation accuracy associated with this checkpoint.
-
-    Returns:
-        None
-    """
-    for path in base_dir.glob(f"best_model_{criteria}*.pt"):
-        log.debug(f"Removing previous best: {path}")
-        path.unlink()
-
-    model_path = base_dir / f"best_model_{criteria}_{loss:.3f}_{accuracy:.3f}.pt"
-    torch.save(
-        obj={
-            "model_state_dict": model.state_dict(),
-            "optimizer_state_dict": opt.state_dict(),
-        },
-        f=model_path,
-    )
 
 
 def compute_ls_mmse(
@@ -332,14 +267,7 @@ def compute_ls_mmse(
     total = 0
     total_fit_ls = 0.0
     total_fit_mmse = 0.0
-    to_save = {
-        "true_impulse_response": [],
-        "ls_estimate": [],
-        "mmse_estimate": [],
-        "model_best_accuracy": [],
-        "model_best_loss": [],
-        "best_order": [],
-    }
+    results_manager = TestResultsManager(base_dir)
 
     model_acc.eval()
     model_loss.eval()
@@ -367,12 +295,14 @@ def compute_ls_mmse(
             total_fit_mmse += fit_mmse_batch.sum().item()
             total += batch_size
 
-            to_save["true_impulse_response"].append(g_true_batch.cpu())
-            to_save["ls_estimate"].append(ls_estimate.cpu())
-            to_save["mmse_estimate"].append(mmse_estimate.cpu())
-            to_save["model_best_accuracy"].append(model_acc_estimate.cpu())
-            to_save["model_best_loss"].append(model_loss_estimate.cpu())
-            to_save["best_order"].append(best_order.cpu())
+            results_manager.update(
+                true_impulse_response=g_true_batch,
+                ls_estimate=ls_estimate,
+                mmse_estimate=mmse_estimate,
+                model_best_accuracy=model_acc_estimate,
+                model_best_loss=model_loss_estimate,
+                best_order=best_order,
+            )
 
     average_fit_ls = total_fit_ls / max(total, 1)
     average_fit_mmse = total_fit_mmse / max(total, 1)
@@ -381,10 +311,7 @@ def compute_ls_mmse(
     log.info(f"LS FIT: {average_fit_ls:.3f}")
     log.info(f"MMSE FIT: {average_fit_mmse:.3f}")
 
-    torch.save(
-        {key: torch.cat(value) for key, value in to_save.items()},
-        base_dir / "test_impulse_responses.pt",
-    )
+    results_manager.save()
 
     return average_fit_ls, average_fit_mmse
 
