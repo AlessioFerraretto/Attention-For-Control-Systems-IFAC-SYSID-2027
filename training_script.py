@@ -379,31 +379,16 @@ def test(
         "Testing best models (found during training) in terms of loss and accuracy"
     )
 
+    ckpt_manager = CheckpointManager(base_dir)
+
     model_acc = construct_model(cfg=cfg, device=device)
     model_loss = construct_model(cfg=cfg, device=device)
 
+    model_acc = ckpt_manager.load_best(model_acc, "acc")
+    model_loss = ckpt_manager.load_best(model_loss, "loss")
+
     total_params = sum(p.numel() for p in model_acc.parameters())
     log.info(f"Number of parameters: {total_params}")
-
-    acc_file = list(base_dir.glob("best_model_acc*.pt"))
-    loss_file = list(base_dir.glob("best_model_loss*.pt"))
-
-    if acc_file:
-        best_acc = torch.load(f=acc_file[0], weights_only=False)
-        log.info(f"Saved: {acc_file[0]}")
-    else:
-        log.error("Best accuracy model not found")
-        sys.exit(1)
-
-    if loss_file:
-        best_loss = torch.load(f=loss_file[0], weights_only=False)
-        log.info(f"Saved: {loss_file[0]}")
-    else:
-        log.error("Best loss model not found")
-        sys.exit(1)
-
-    model_acc.load_state_dict(best_acc["model_state_dict"])
-    model_loss.load_state_dict(best_loss["model_state_dict"])
 
     strategy_acc = make_strategy(cfg)
     strategy_acc.setup_for_eval(model_acc)
@@ -444,8 +429,7 @@ def test(
     )
 
     if not cfg.save_model:
-        acc_file[0].unlink(missing_ok=True)
-        loss_file[0].unlink(missing_ok=True)
+        ckpt_manager.delete_best_models()
         log.info("Deleted best models.")
 
 
