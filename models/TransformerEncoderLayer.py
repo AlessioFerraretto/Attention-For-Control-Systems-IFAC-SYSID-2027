@@ -106,6 +106,7 @@ class TransformerEncoderLayer(TrackableModule):
         else:
             raise ValueError(f"Unsupported activation function: {name}")
 
+    # Post-Norm forward pass: the normalization is applied after the residual connection.
     def forward(self, hidden, mask=None):
         """Apply the encoder block to a sequence of hidden states.
 
@@ -132,5 +133,45 @@ class TransformerEncoderLayer(TrackableModule):
         hidden = self.block["norm1"](hidden + attn_out)
         feed_forward = self.block["ffn"](hidden)
         hidden = self.block["norm2"](hidden + feed_forward)
+
+        return hidden
+
+    def forward_da_provare(self, hidden, mask=None):
+        """Apply the encoder block to a sequence of hidden states.
+
+        Parameters:
+            hidden: Tensor of shape (batch, seq_len, features).
+            mask: Tensor of shape (batch, seq_len).
+
+        Returns:
+            torch.Tensor: Updated hidden states after self-attention and the
+            feed-forward network.
+
+        Raises:
+            ValueError: If the input tensor is not three-dimensional.
+        """
+        if hidden.dim() != 3:
+            raise ValueError(
+                "Expected input of shape (batch, seq_len, features); "
+                f"got {tuple(hidden.shape)}"
+            )
+
+        # 1. Normlize before the Multi-Head Self-Attention
+        normed_hidden_1 = self.block["norm1"](hidden)
+        attn_out, _ = self.block["attn"](
+            normed_hidden_1,
+            normed_hidden_1,
+            normed_hidden_1,
+            key_padding_mask=mask,
+            need_weights=False,
+        )
+        # The residual connection bypasses the normalization
+        hidden = hidden + attn_out
+
+        # Normalize before the Feed-Forward Network
+        normed_hidden_2 = self.block["norm2"](hidden)
+        feed_forward = self.block["ffn"](normed_hidden_2)
+        # The residual connection bypasses the normalization
+        hidden = hidden + feed_forward
 
         return hidden
