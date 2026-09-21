@@ -6,9 +6,12 @@ transformer_seed: null
 data_seed: null
 debug_every: 10
 
+resume_checkpoint: null
+inference: false
+
 defaults:
   - _self_
-  - experiment: future-prediction
+  - experiment: null
 
 hydra:
   run:

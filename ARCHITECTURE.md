@@ -34,12 +34,25 @@ The main entry point is `training_script.py`, which uses Hydra to load configura
 The workflow is as follows:
 
 1. The training entrypoint `training_script.py` loads Hydra configuration and sets up the runtime environment.
-2. TODO
-3. TODO
-4. The training loop consumes batches, computes loss, and updates weights.
-5. Validation uses held-out data to compute loss and exact-match metrics.
-6. Checkpoints and best models are saved to Hydra-managed output locations.
-7. Optional logging to Weights & Biases is performed if enabled in the configuration.
+2. The script configures the random seeds for reproducibility (via SeedManager), initializes the Weights & Biases logger (WandDBLogger), determines the optimal hardware device (get_torch_device), and builds the PyTorch DataLoaders for the training, validation, and test splits.
+3. Execution Mode Selection (Train, Resume, or Inference): The script checks the configuration for specific flags to dictate the run mode:
+
+- Standard Training: If no special flags are set, it initializes a fresh model and optimizer based on the defined strategy and begins training from epoch 1.
+- Resuming Training (resume_checkpoint): If a valid path is provided to resume_checkpoint in the configuration, the script loads the model weights, optimizer state, starting epoch, and previous best metrics. Important: When resuming training, you must ensure that the Hydra configuration used matches the exact configuration that created the checkpoint. Altering model architecture, dataset parameters, or strategy configurations will cause dimension mismatches or undefined behavior.
+- Inference-Only Mode (inference=True): If the inference flag is set to True, the entire training process is skipped. This is designed for evaluating previously fully trained models.
+
+4. Training Loop and Validation (if applicable): The model iterates through the training data, utilizing the customized strategy to inject specific logic. After each epoch, the model is evaluated on the validation set. The CheckpointManager monitors the validation metrics and automatically saves standard checkpoints, as well as distinct "best" models based on both the highest validation accuracy and the lowest validation loss. Early stopping is triggered if the target fit metric is reached.
+5. Testing and Evaluation: Regardless of whether the script ran a full training loop or was launched in inference=True mode, it concludes by executing the test() function.
+   The CheckpointManager loads the two optimal models: one prioritizing accuracy (best_model_acc) and the other prioritizing loss (best_model_loss).
+   Important for Inference Mode: If you are running with inference=True, you must ensure that the pre-trained best model files are correctly placed in the corresponding Hydra output folder (base_dir) so the CheckpointManager can find and load them.
+   The script evaluates both best models against the test dataset, computes baseline statistical estimates (LS and MMSE baselines), and logs the final comparative metrics via WandB before exiting. Optionally, it cleans up the saved models if save_model is set to false.
+   computes loss, and updates weights.
+
+Examples:
+
+- python -m training_script experiment=dynamic-impulse-response-prediction
+- python -m training_script experiment=dynamic-impulse-response-prediction resume_checkpoint="saved_models/my_model.pt"
+- python -m training_script experiment=dynamic-impulse-response-prediction inference=True
 
 ## 3. Configuration and Experiment Management
 

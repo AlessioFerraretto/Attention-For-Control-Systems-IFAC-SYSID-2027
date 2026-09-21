@@ -8,11 +8,11 @@ TEMPLATE = """
 transformer_seed: 1
 data_seed: 1
 
-epochs: 100
+epochs: 50
 learning_rate: 1e-3
-eval_every: 101
+eval_every: 50
 
-training_batch_size: VAR_1
+training_batch_size: 64
 validation_batch_size: 64
 test_batch_size: 64
 
@@ -26,15 +26,15 @@ model:
   embedding: transformer-positional-encoding # Embedding type
   layer_name: transformer-encoder-layer # Name of the layer used
   out_layer: token-wise-readout-for-impulse-response-prediction # Output layer type
-  num_layers: VAR_2
+  num_layers: VAR_1
 
   # Layer parameters
   input_dim: 2
-  model_dim: VAR_3
-  num_heads: VAR_4
+  model_dim: VAR_2
+  num_heads: VAR_3
   output_dim: ${model.model_dim}
   activation_function: gelu
-  dropout: VAR_5
+  dropout: 0.1
 
   # Only for out_layer = mlp-classifier
   input_dim_classifier: "${model.output_dim}" # Input dimension of the classifier = output_dim
@@ -70,7 +70,7 @@ dataset:
   jitter_regularization_parameter: 0.00001
 
   padding: 0
-  filter_type: VAR_6
+  filter_type: "type_1"
   a_param: 0.9
 
   out_dir_name: "dynamic-impulse-response-prediction"
@@ -87,19 +87,16 @@ wandb:
 
 
 # Define the parameter grids
-VAR_1 = [64, 256]
-VAR_2 = [2, 4, 16]
-VAR_3 = [64, 256]
-VAR_4 = [4, 8, 32]
-VAR_5 = [0, 0.1]
-VAR_6 = ["white", "type_1", "type_2"]
+VAR_1 = [4, 8, 16]
+VAR_2 = [64, 128, 256]
+VAR_3 = [4, 8, 16, 32]
 # Create an output directory so we don't clutter the root folder
 output_dir = "configs/experiment/bulk/"
 
 os.makedirs(output_dir, exist_ok=True)
 
 # Generate all possible combinations using itertools.product
-combinations = list(itertools.product(VAR_1, VAR_2, VAR_3, VAR_4, VAR_5, VAR_6))
+combinations = list(itertools.product(VAR_1, VAR_2, VAR_3))
 
 print(f"Generating {len(combinations)} configuration files...")
 
@@ -108,19 +105,16 @@ input("Press Enter to continue or Ctrl+C to abort...")
 count = 0
 
 # Iterate over each combination, replace variables, and save
-for v1, v2, v3, v4, v5, v6 in combinations:
+for v1, v2, v3 in combinations:
     # 1. Replace the placeholders in the template with the current values
     config_content = (
         TEMPLATE.replace("VAR_1", str(v1))
         .replace("VAR_2", str(v2))
         .replace("VAR_3", str(v3))
-        .replace("VAR_4", str(v4))
-        .replace("VAR_5", str(v5))
-        .replace("VAR_6", str(v6))
     )
     count += 1
     # 2. Format the filename according to your required style
-    filename = f"dynamic-impulse-response-prediction-snr3-10-{v1}-{v2}-{v3}-{v4}-{v5}-{v6}.yaml"
+    filename = f"dynamic-impulse-response-prediction-snr3-10-{v1}-{v2}-{v3}.yaml"
     filepath = os.path.join(output_dir, filename)
 
     # 3. Write the new configuration to the file

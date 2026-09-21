@@ -187,3 +187,4 @@ outputs/
 wandb_api_key.txt
 /wandb
 /configs/experiment/bulk
+/configs/experiment/proble

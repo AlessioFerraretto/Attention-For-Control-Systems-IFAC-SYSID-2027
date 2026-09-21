@@ -14,6 +14,9 @@ from typing import Literal
 import torch
 from torch import nn
 from torch.optim import Optimizer
+from torch.utils.data import DataLoader
+
+from utils.SeedManager import SeedManager
 
 log = logging.getLogger("script")
 BestCriteria = Literal["acc", "loss"]
@@ -39,9 +42,15 @@ class CheckpointManager:
         self.checkpoints_dir.mkdir(exist_ok=True)
 
     def save_checkpoint(
-        self, epoch: int, model: nn.Module, opt: Optimizer, loss: float, accuracy: float
+        self,
+        epoch: int,
+        model: nn.Module,
+        opt: Optimizer,
+        loss: float,
+        accuracy: float,
+        global_step: int = 0,
     ):
-        """Save a standard checkpoint for a specific epoch.
+        """Save a checkpoint for a specific epoch.
 
         Parameters:
           epoch : int
@@ -51,9 +60,11 @@ class CheckpointManager:
           opt : Optimizer
             Optimizer instance whose state dictionary is persisted.
           loss : float
-            Training or validation loss to store alongside the model state.
+            Training or validation loss stored alongside the model state.
           accuracy : float
-            Accuracy value to store alongside the model state.
+            Accuracy value stored alongside the model state.
+          global_step : int
+            Global optimization step associated with the checkpoint.
 
         Returns:
           None: This method writes the checkpoint to disk and returns nothing.
@@ -63,10 +74,13 @@ class CheckpointManager:
         )
         torch.save(
             obj={
+                "epoch": epoch,
+                "global_step": global_step,
                 "model_state_dict": model.state_dict(),
                 "optimizer_state_dict": opt.state_dict(),
                 "loss": loss,
                 "accuracy": accuracy,
+                "rng_states": SeedManager().get_rng_states(),
             },
             f=model_path,
         )
@@ -78,8 +92,10 @@ class CheckpointManager:
         opt: Optimizer,
         loss: float,
         accuracy: float,
+        epoch: int = 0,
+        global_step: int = 0,
     ):
-        """Save the current best model for the requested optimization criterion.
+        """Save the current best model for the selected optimization criterion.
 
         Parameters:
           model : nn.Module
@@ -92,6 +108,10 @@ class CheckpointManager:
             Current loss value associated with the saved model.
           accuracy : float
             Current accuracy value associated with the saved model.
+          epoch : int
+            Epoch index of the best model snapshot.
+          global_step : int
+            Global training step corresponding to the snapshot.
 
         Returns:
           None: This method removes any previous best-model artifact and writes a new one.
@@ -105,8 +125,13 @@ class CheckpointManager:
         )
         torch.save(
             obj={
+                "epoch": epoch,
+                "global_step": global_step,
                 "model_state_dict": model.state_dict(),
                 "optimizer_state_dict": opt.state_dict(),
+                "loss": loss,
+                "accuracy": accuracy,
+                "rng_states": SeedManager().get_rng_states(),
             },
             f=model_path,
         )
@@ -144,3 +169,70 @@ class CheckpointManager:
         """
         for path in self.base_dir.glob("best_model_*.pt"):
             path.unlink(missing_ok=True)
+
+    def resume_training(
+        self,
+        model: nn.Module,
+        opt: Optimizer,
+        resume_path: Path,
+        train_loader: DataLoader,
+        val_loader: DataLoader,
+    ) -> tuple[nn.Module, Optimizer, int, float, float]:
+        """Restore a training state from the given checkpoint.
+
+        Load the model weights, optimizer state, metrics, and the saved random
+        state so that subsequent data generation resumes deterministically.
+
+        Parameters:
+          model : nn.Module
+            Model instance that receives the saved weights.
+          opt : Optimizer
+            Optimizer instance that receives the saved state.
+          resume_path : Path
+            Exact path to the checkpoint file to restore.
+
+        Returns:
+          tuple[nn.Module, Optimizer, int, float, float]: A tuple containing the restored model, optimizer, start epoch, last loss, and last accuracy.
+        """
+        log.info(f"Loading checkpoint from: {resume_path}")
+
+        checkpoint = torch.load(resume_path, weights_only=False)
+
+        model.load_state_dict(checkpoint["model_state_dict"])
+        opt.load_state_dict(checkpoint["optimizer_state_dict"])
+
+        last_epoch = checkpoint.get("epoch", 0)
+        start_epoch = last_epoch + 1
+
+        last_loss = checkpoint.get("loss", float("inf"))
+        last_accuracy = checkpoint.get("accuracy", float("-inf"))
+
+        if "rng_states" in checkpoint:
+            SeedManager().set_rng_states(checkpoint["rng_states"])
+            log.info(
+                "RNG states successfully restored. Data generation will be fully deterministic."
+            )
+        else:
+            log.warning(
+                "No RNG states found in checkpoint! Data generation will start fresh."
+            )
+
+        # TODO: Seed every epoch so that the dataloader is in sync without
+        # having to iterate through all previous epochs.
+        # This is a temporary solution to ensure deterministic behavior.
+
+        if start_epoch > 1 and (train_loader or val_loader):
+            epochs_to_skip = start_epoch - 1
+            log.info(
+                f"Fast-forwarding DataLoaders by {epochs_to_skip} epoch(s) to sync RNG states. Please wait..."
+            )
+            for _ in range(epochs_to_skip):
+                if train_loader:
+                    for _ in train_loader:
+                        pass
+                if val_loader:
+                    for _ in val_loader:
+                        pass
+            log.info("DataLoaders fully synced!")
+
+        return model, opt, start_epoch, last_loss, last_accuracy

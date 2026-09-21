@@ -1,5 +1,6 @@
 """Centralized, independent random streams for data and transformer code."""
 
+import os
 import secrets
 
 import numpy as np
@@ -16,6 +17,17 @@ class SeedManager:
             cls._instance = super().__new__(cls)
             cls._instance._dataset_torch_generator = torch.Generator()
             cls._instance._dataset_numpy_generator = np.random.default_rng()
+
+            # 1. Obbliga PyTorch a usare algoritmi deterministici
+            torch.use_deterministic_algorithms(True)
+
+            # 2. Obbliga cuBLAS a essere deterministico (richiesto da PyTorch >= 1.8)
+            os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
+
+            # 3. Disabilita la ricerca euristica di cuDNN e forza algoritmi deterministici
+            torch.backends.cudnn.benchmark = False
+            torch.backends.cudnn.deterministic = True
+
         return cls._instance
 
     def seed_dataset(self, seed: int | None) -> None:
@@ -70,6 +82,41 @@ class SeedManager:
     def transformer_randn(self, *size, **kwargs) -> torch.Tensor:
         """Sample from PyTorch's transformer stream seeded by ``seed_transformer``."""
         return torch.randn(*size, **kwargs)
+
+    def get_rng_states(self) -> dict:
+        """Return the current state of all random-number generators.
+
+        Returns:
+          dict: Dictionary containing the global PyTorch, NumPy, and dataset-specific RNG states.
+        """
+        states = {
+            "torch_global": torch.get_rng_state(),
+            "numpy_global": np.random.get_state(),
+            "numpy_dataset": self._dataset_numpy_generator.bit_generator.state,
+            "dataset_torch": self._dataset_torch_generator.get_state(),
+            "dataset_numpy": self._dataset_numpy_generator.bit_generator.state,
+        }
+        if torch.cuda.is_available():
+            states["cuda_global"] = torch.cuda.get_rng_state_all()
+        return states
+
+    def set_rng_states(self, states: dict) -> None:
+        """Restore the saved state of all random-number generators.
+
+        Parameters:
+          states : dict
+            Dictionary of RNG states returned by get_rng_states.
+
+        Returns:
+          None: This method restores the state of the global and dataset generators in place.
+        """
+        torch.set_rng_state(states["torch_global"])
+        np.random.set_state(states["numpy_global"])
+        self._dataset_numpy_generator.bit_generator.state = states["numpy_dataset"]
+        self._dataset_torch_generator.set_state(states["dataset_torch"])
+        self._dataset_numpy_generator.bit_generator.state = states["dataset_numpy"]
+        if "cuda_global" in states and torch.cuda.is_available():
+            torch.cuda.set_rng_state_all(states["cuda_global"])
 
 
 def seed_data_worker(worker_id: int) -> None:

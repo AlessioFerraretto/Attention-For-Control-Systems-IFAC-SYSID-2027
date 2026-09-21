@@ -19,7 +19,6 @@ if hasattr(sys.stdout, "reconfigure"):
         pass  # Best-effort; older Python or non-standard stream
 
 from pathlib import Path
-from typing import Literal
 
 import hydra
 import torch
@@ -40,8 +39,6 @@ from utils.SeedManager import SeedManager
 from utils.TestResultsManager import TestResultsManager
 
 log = logging.getLogger("script")
-
-BestCriteria = Literal["acc", "loss"]
 
 # Register the `get_job_id` as a custom OmegaConf resolver. This allows the
 # output of the function to be accessed when building the Hydra configuration.
@@ -75,14 +72,23 @@ def main(cfg: DictConfig):
 
     train_loader, val_loader, test_loader = get_data_loaders(cfg=cfg)
 
-    training(
-        cfg=cfg,
-        base_dir=base_dir,
-        device=device,
-        wandb_logger=wandb_logger,
-        train_loader=train_loader,
-        val_loader=val_loader,
-    )
+    is_inference_only = cfg.get("inference", False)
+
+    if not is_inference_only:
+        training(
+            cfg=cfg,
+            base_dir=base_dir,
+            device=device,
+            wandb_logger=wandb_logger,
+            train_loader=train_loader,
+            val_loader=val_loader,
+        )
+    else:
+        log.info(
+            "Inference mode activated (inference=True). Skipping training phase..."
+        )
+
+    # La funzione test verrà eseguita in entrambi i casi
     test(
         cfg=cfg,
         base_dir=base_dir,
@@ -151,8 +157,28 @@ def training(
     # Increments every time an optimization step is performed.
     global_step = 0
 
+    # Initialize start_epoch to 1 (will be overwritten if resuming)
+    start_epoch = 1
+
+    # Check if a resume checkpoint path is provided in the configuration
+    resume_path = cfg.get("resume_checkpoint")
+    if resume_path and Path(resume_path).exists():
+        log.info(f"Resuming training from checkpoint: {resume_path}")
+        model, opt, start_epoch, best_val_loss, best_fit = ckpt_manager.resume_training(
+            model=model,
+            opt=opt,
+            resume_path=resume_path,
+            train_loader=train_loader,
+            val_loader=val_loader,
+        )
+        # Synchronize the global step for schedulers or custom strategy logic
+        global_step = (start_epoch - 1) * len(train_loader)
+    elif resume_path:
+        log.error(f"Resume path specified but not found: {resume_path}")
+        sys.exit(1)
+
     # ----------------------------TRAINING, VALIDATION PROCEDURE-----------------------------
-    for epoch in range(1, cfg.epochs + 1):
+    for epoch in range(start_epoch, cfg.epochs + 1):
         log.info(f"Epoch {epoch: 3d} / {cfg.epochs}")
 
         model.train(True)
