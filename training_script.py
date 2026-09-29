@@ -121,12 +121,10 @@ def main(cfg: DictConfig):
                 wandb_logger=wandb_logger,
             )
         case "inference":
-            model_acc, model_loss = load_best_models(cfg, device, base_dir)
-
             evaluate_test_set(
                 test_loader=test_loader,
                 device=device,
-                models={ModelCriteria.ACC: model_acc, ModelCriteria.LOSS: model_loss},
+                models={ModelCriteria.INF: model},
                 cfg=cfg,
                 base_dir=base_dir,
                 wandb_logger=wandb_logger,
