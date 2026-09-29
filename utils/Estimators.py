@@ -131,3 +131,58 @@ def compute_mmse(
     fit_metric = 100.0 * (1.0 - (norm_difference / (norm_true_response + 1e-8)))
 
     return estimated_impulse, fit_metric
+
+
+def compute_hutchinson_df_and_sure(
+    model, inputs_orig, masks, u, y, noise_var, g_length, M=5
+):
+    """
+    Computes the effective Degrees of Freedom (df) and SURE estimate using Hutchinson's stochastic trace method.
+    Addresses Hypothesis/Point 3 from Pillonetto's diagnostic notes.
+    """
+    B, n = y.shape
+    device = y.device
+
+    # 1. Prepare y for gradient computation
+    y_with_grad = y.clone().requires_grad_(True)
+
+    # 2. Reconstruct the input tensor while preserving the computational graph (based on the Dataset's __getitem__)
+    uy = torch.stack([u, y_with_grad], dim=-1)  # (B, n, 2)
+    padding_part = inputs_orig[:, n:, :]  # (B, g_length, 2)
+    inputs_with_grad = torch.cat([uy, padding_part], dim=1)
+
+    # 3. Forward pass of the "frozen" model
+    g_hat, _ = model(inputs_with_grad, masks)
+
+    # 4. Convolution y_hat = U * g_hat (Vectorized Toeplitz Matrix approach)
+    # y_hat_i = sum_{j=0}^{g_length-1} g_j * u_{i-j}
+    u_padded = torch.nn.functional.pad(u, (g_length - 1, 0))
+    U = u_padded.unfold(dimension=1, size=g_length, step=1)
+    U = torch.flip(U, dims=[2])
+    y_hat = torch.bmm(U, g_hat.unsqueeze(-1)).squeeze(-1)  # Shape: (B, n)
+
+    # 5. Hutchinson's method to estimate df = tr(dy_hat / dy)
+    df_estimate = torch.zeros(B, device=device)
+    for _ in range(M):
+        # Rademacher vector (equiprobable -1 or +1 values)
+        z = (torch.randint(0, 2, size=y_hat.shape, device=device).float() * 2) - 1.0
+
+        # Vector-Jacobian Product (VJP) via autograd
+        vjp = torch.autograd.grad(
+            outputs=y_hat,
+            inputs=y_with_grad,
+            grad_outputs=z,
+            retain_graph=True,
+            create_graph=False,
+        )[0]
+
+        df_estimate += torch.sum(z * vjp, dim=1)
+
+    df_estimate /= M
+
+    # 6. Compute SURE Risk estimate: ||y - y_hat||^2 + 2 * \sigma^2 * df - n * \sigma^2
+    residuals_sq = torch.sum((y - y_hat) ** 2, dim=1)
+    sure_estimate = residuals_sq + 2 * noise_var * df_estimate - n * noise_var
+
+    # Return detached estimates for safe logging and accumulation
+    return df_estimate.detach(), sure_estimate.detach()

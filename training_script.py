@@ -5,8 +5,6 @@ Modular training procedure that can manage custom training strategies
 import logging
 import sys
 
-from utils import ModelCriteria
-
 # Windows compatibility: Python's default console encoding on Windows is often
 # cp1252, which cannot encode common Unicode characters (->, Greek letters,
 # math symbols) that may appear in config descriptions, log messages, or
@@ -36,7 +34,8 @@ from monitor.WandDBLogger import WandDBLogger
 from training_strategies.Factory import make_strategy
 from utils.CheckpointManager import CheckpointManager
 from utils.Environment import get_job_id, get_torch_device
-from utils.Estimators import compute_ls, compute_mmse
+from utils.Estimators import compute_hutchinson_df_and_sure, compute_ls, compute_mmse
+from utils.ModelCriteria import ModelCriteria
 from utils.SeedManager import SeedManager
 from utils.TestResultsManager import TestResultsManager
 
@@ -404,11 +403,12 @@ def evaluate_test_set(
     """
     Evaluates all provided models (passed as a dict mapping criteria to model)
     and the LS/MMSE baselines in a single, unified loop over the test dataset.
+    Also computes Stein's Unbiased Risk Estimate (SURE) and effective degrees of freedom.
     """
-    log.info("Starting unified test set evaluation (Models + Baselines)...")
+    log.info("Starting unified test set evaluation (Models + Baselines + SURE)...")
     results_manager = TestResultsManager(base_dir)
 
-    # Impostiamo la strategy prendendo il primo modello disponibile (è stateless)
+    # Set up the strategy using the first available model (strategy is stateless enough for evaluation)
     strategy = make_strategy(cfg)
     first_model = next(iter(models.values()))
     strategy.setup_for_eval(first_model)
@@ -420,6 +420,11 @@ def evaluate_test_set(
     total_samples = 0
     total_loss = {crit: 0.0 for crit in models}
     total_fit = {crit: 0.0 for crit in models}
+
+    # --- NEW COUNTERS FOR SURE AND DEGREES OF FREEDOM ---
+    total_df = {crit: 0.0 for crit in models}
+    total_sure = {crit: 0.0 for crit in models}
+
     total_fit_ls = 0.0
     total_fit_mmse = 0.0
 
@@ -436,8 +441,9 @@ def evaluate_test_set(
             y_batch = info["y"].to(device)
             noise_var_batch = info["noise_variance"].to(device)
             kernel_matrix_batch = info["kernel_matrix"].to(device)
+            g_length = test_loader.dataset.g_length
 
-            # 1. Model Predictions & Metrics (Iterating dynamically)
+            # 1. Model Predictions & Metrics
             preds_dict = {}
             for crit, model in models.items():
                 preds, _ = model(inputs, masks)
@@ -449,9 +455,24 @@ def evaluate_test_set(
                 metrics = strategy.compute_metrics(preds, targets)
                 total_fit[crit] += metrics["fit"] * batch_size
 
+                # --- COMPUTE DF AND SURE (Temporarily re-enable gradients) ---
+                with torch.enable_grad():
+                    df_batch, sure_batch = compute_hutchinson_df_and_sure(
+                        model,
+                        inputs,
+                        masks,
+                        u_batch,
+                        y_batch,
+                        noise_var_batch,
+                        g_length,
+                        M=5,
+                    )
+                total_df[crit] += df_batch.sum().item()
+                total_sure[crit] += sure_batch.sum().item()
+
             # 2. Baselines (LS & MMSE)
             ls_estimate, fit_ls_batch, best_order = compute_ls(
-                u_batch, y_batch, targets, test_loader.dataset.g_length
+                u_batch, y_batch, targets, g_length
             )
             mmse_estimate, fit_mmse_batch = compute_mmse(
                 u_batch, y_batch, targets, noise_var_batch, kernel_matrix_batch
@@ -461,35 +482,39 @@ def evaluate_test_set(
             total_fit_mmse += fit_mmse_batch.sum().item()
 
             # 3. Store Results
-            results_manager.update(
-                true_impulse_response=targets,
-                ls_estimate=ls_estimate,
-                mmse_estimate=mmse_estimate,
-                model_best_accuracy_estimate=preds_dict.get(ModelCriteria.ACC),
-                model_best_loss_estimate=preds_dict.get(ModelCriteria.LOSS),
-                best_order=best_order,
-            )
+            if cfg.get("running_mode") == "training":
+                results_manager.update(
+                    true_impulse_response=targets,
+                    ls_estimate=ls_estimate,
+                    mmse_estimate=mmse_estimate,
+                    model_best_accuracy_estimate=preds_dict.get(ModelCriteria.ACC),
+                    model_best_loss_estimate=preds_dict.get(ModelCriteria.LOSS),
+                    best_order=best_order,
+                )
 
     # Averages
     avg_loss = {crit: val / max(total_samples, 1) for crit, val in total_loss.items()}
     avg_fit = {crit: val / max(total_samples, 1) for crit, val in total_fit.items()}
+    avg_df = {crit: val / max(total_samples, 1) for crit, val in total_df.items()}
+    avg_sure = {crit: val / max(total_samples, 1) for crit, val in total_sure.items()}
+
     avg_fit_ls = total_fit_ls / max(total_samples, 1)
     avg_fit_mmse = total_fit_mmse / max(total_samples, 1)
 
     # Logging
-    print("\n" + "=" * 60)
-    print(" " * 15 + "TEST SET EVALUATION SUMMARY")
-    print("=" * 60)
+    print("\n" + "=" * 90)
+    print(" " * 30 + "TEST SET EVALUATION SUMMARY")
+    print("=" * 90)
 
     for crit in models:
         crit_name = crit.name if hasattr(crit, "name") else str(crit).upper()
         log.info(
-            f"Model (Best {crit_name:<4}) - Loss: {avg_loss[crit]:.5f}, FIT: {avg_fit[crit]:.3f}%"
+            f"Model ({crit_name:<4}) - Loss: {avg_loss[crit]:.5f}, FIT: {avg_fit[crit]:>6.3f}%, DF: {avg_df[crit]:>7.2f}, SURE: {avg_sure[crit]:>8.4f}"
         )
 
-    log.info(f"Baseline LS       - FIT: {avg_fit_ls:.3f}%")
-    log.info(f"Baseline MMSE     - FIT: {avg_fit_mmse:.3f}%")
-    print("=" * 60 + "\n")
+    log.info(f"Baseline LS   - FIT: {avg_fit_ls:>6.3f}%")
+    log.info(f"Baseline MMSE - FIT: {avg_fit_mmse:>6.3f}%")
+    print("=" * 90 + "\n")
 
     # Wandb Logging
     wandb_dict = {
@@ -500,10 +525,13 @@ def evaluate_test_set(
         crit_val = crit.value if hasattr(crit, "value") else str(crit).lower()
         wandb_dict[f"test/model_{crit_val}_loss"] = avg_loss[crit]
         wandb_dict[f"test/model_{crit_val}_fit"] = avg_fit[crit]
+        wandb_dict[f"test/model_{crit_val}_df"] = avg_df[crit]
+        wandb_dict[f"test/model_{crit_val}_sure"] = avg_sure[crit]
 
     wandb_logger.log(wandb_dict)
 
-    results_manager.save()
+    if cfg.get("running_mode") == "training":
+        results_manager.save()
 
 
 def load_best_models(
