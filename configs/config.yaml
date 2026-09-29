@@ -7,7 +7,9 @@ data_seed: null
 debug_every: 10
 
 resume_checkpoint: null
-inference: false
+running_mode: "training"
+model_mode: "new"
+model_path: null
 
 defaults:
   - _self_

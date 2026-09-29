@@ -5,7 +5,9 @@ Modular training procedure that can manage custom training strategies
 import logging
 import sys
 
-# Windows compatibility: Python's default console encoding on Windows is often #(Nuova)
+from utils import ModelCriteria
+
+# Windows compatibility: Python's default console encoding on Windows is often
 # cp1252, which cannot encode common Unicode characters (->, Greek letters,
 # math symbols) that may appear in config descriptions, log messages, or
 # docstrings. Reconfigure stdout/stderr to UTF-8 so that logging.StreamHandler
@@ -72,33 +74,76 @@ def main(cfg: DictConfig):
 
     train_loader, val_loader, test_loader = get_data_loaders(cfg=cfg)
 
-    is_inference_only = cfg.get("inference", False)
+    model_mode = cfg.get("model_mode")
+    running_mode = cfg.get("running_mode")
 
-    if not is_inference_only:
-        training(
-            cfg=cfg,
-            base_dir=base_dir,
-            device=device,
-            wandb_logger=wandb_logger,
-            train_loader=train_loader,
-            val_loader=val_loader,
-        )
-    else:
-        log.info(
-            "Inference mode activated (inference=True). Skipping training phase..."
-        )
+    match model_mode:
+        case "new":
+            model = construct_model(cfg=cfg, device=device)
+        case "load":
+            model_path_str = cfg.get("model_path")
+            if not model_path_str:
+                log.error(
+                    "You must specify the model path. Example: model_path='outputs/best_model_loss.pt'"
+                )
+                sys.exit(1)
 
-    # La funzione test verrà eseguita in entrambi i casi
-    test(
-        cfg=cfg,
-        base_dir=base_dir,
-        device=device,
-        test_loader=test_loader,
-        wandb_logger=wandb_logger,
-    )
+            model_path = Path(model_path_str)
+            if not model_path.exists():
+                log.error(f"Model file not found: {model_path}")
+                sys.exit(1)
+
+            log.info(f"Loading weights from: {model_path}")
+            model = construct_model(cfg=cfg, device=device)
+            ckpt_manager = CheckpointManager(model_path.parent)
+            model = ckpt_manager.load_checkpoint(model, model_path)
+
+    match running_mode:
+        case "training":
+            training(
+                model=model,
+                cfg=cfg,
+                base_dir=base_dir,
+                device=device,
+                wandb_logger=wandb_logger,
+                train_loader=train_loader,
+                val_loader=val_loader,
+            )
+
+            model_acc, model_loss = load_best_models(cfg, device, base_dir)
+
+            evaluate_test_set(
+                test_loader=test_loader,
+                device=device,
+                models={ModelCriteria.ACC: model_acc, ModelCriteria.LOSS: model_loss},
+                cfg=cfg,
+                base_dir=base_dir,
+                wandb_logger=wandb_logger,
+            )
+        case "inference":
+            model_acc, model_loss = load_best_models(cfg, device, base_dir)
+
+            evaluate_test_set(
+                test_loader=test_loader,
+                device=device,
+                models={ModelCriteria.ACC: model_acc, ModelCriteria.LOSS: model_loss},
+                cfg=cfg,
+                base_dir=base_dir,
+                wandb_logger=wandb_logger,
+            )
+        case "diagnostic":
+            diagnostic(
+                model=model,
+                cfg=cfg,
+                train_loader=train_loader,
+                val_loader=val_loader,
+                test_loader=test_loader,
+                device=device,
+            )
 
 
 def training(
+    model: nn.Module,
     cfg: DictConfig,
     base_dir: Path,
     device: torch.device,
@@ -133,12 +178,10 @@ def training(
     ckpt_manager = CheckpointManager(base_dir)
 
     # ------------------------------------STRATEGY AND MODEL----------------------------
-    model = construct_model(cfg=cfg, device=device)
     total_params = sum(p.numel() for p in model.parameters())
     log.info(f"Number of parameters: {total_params}")
 
     strategy = make_strategy(cfg)
-
     strategy.setup(model, cfg, device, train_loader)
 
     # ------------------------------LOSS, OPTIMIZER AND USEFUL VARIABLES--------------------
@@ -282,64 +325,203 @@ def training(
     log.info("Training complete.")
 
 
-def compute_ls_mmse(
+def diagnostic(
+    model: nn.Module,
+    cfg: DictConfig,
+    train_loader: DataLoader,
+    val_loader: DataLoader,
     test_loader: DataLoader,
     device: torch.device,
-    model_acc: nn.Module,
-    model_loss: nn.Module,
-    base_dir: Path,
 ):
+    # 1. Setup strategy and loss function for evaluation
+    strategy = make_strategy(cfg)
+    strategy.setup_for_eval(model)
+    loss_function = strategy.loss_fn()
 
-    total = 0
-    total_fit_ls = 0.0
-    total_fit_mmse = 0.0
+    # 2. Evaluate on Training Set
+    log.info("Evaluating on Training Set...")
+    train_loss, train_fit = _evaluate(
+        model=model,
+        loader=train_loader,
+        loss_fn=loss_function,
+        device=device,
+        strategy=strategy,
+    )
+
+    # 3. Evaluate on Validation Set
+    log.info("Evaluating on Validation Set...")
+    val_loss, val_fit = _evaluate(
+        model=model,
+        loader=val_loader,
+        loss_fn=loss_function,
+        device=device,
+        strategy=strategy,
+    )
+
+    # 4. Evaluate on Test Set
+    log.info("Evaluating on Test Set...")
+    test_loss, test_fit = _evaluate(
+        model=model,
+        loader=test_loader,
+        loss_fn=loss_function,
+        device=device,
+        strategy=strategy,
+    )
+
+    # 5. Formatted output
+    total_params = sum(p.numel() for p in model.parameters())
+    arch_name = cfg.model.get("description", "Transformer")
+
+    print("\n" + "=" * 90)
+    print(" " * 30 + "DIAGNOSTIC FIT RESULTS")
+    print("=" * 90)
+    print(
+        f"{'Architecture':<20} | {'# Parameters':<15} | {'Train FIT':<10} | {'Val FIT':<10} | {'Test FIT':<10}"
+    )
+    print("-" * 90)
+    print(
+        f"{arch_name:<20} | {total_params:<15,} | {train_fit:>9.3f}% | {val_fit:>9.3f}% | {test_fit:>9.3f}%"
+    )
+    print("=" * 90 + "\n")
+
+    # 6. Quick diagnostic log
+    if train_fit > 95.0 and test_fit < 85.0:
+        log.info(
+            "DIAGNOSIS: Hypothesis 2 (Benign Interpolation). The model interpolates the training set."
+        )
+    elif abs(train_fit - test_fit) < 10.0:
+        log.info(
+            "DIAGNOSIS: Hypothesis 1 or 3 (Population Bayes). The model does NOT interpolate the finite sample."
+        )
+
+
+def evaluate_test_set(
+    test_loader: DataLoader,
+    device: torch.device,
+    models: dict[ModelCriteria, nn.Module],
+    cfg: DictConfig,
+    base_dir: Path,
+    wandb_logger: WandDBLogger,
+):
+    """
+    Evaluates all provided models (passed as a dict mapping criteria to model)
+    and the LS/MMSE baselines in a single, unified loop over the test dataset.
+    """
+    log.info("Starting unified test set evaluation (Models + Baselines)...")
     results_manager = TestResultsManager(base_dir)
 
-    model_acc.eval()
-    model_loss.eval()
+    # Impostiamo la strategy prendendo il primo modello disponibile (è stateless)
+    strategy = make_strategy(cfg)
+    first_model = next(iter(models.values()))
+    strategy.setup_for_eval(first_model)
+    loss_fn = strategy.loss_fn()
+
+    for model in models.values():
+        model.eval()
+
+    total_samples = 0
+    total_loss = {crit: 0.0 for crit in models}
+    total_fit = {crit: 0.0 for crit in models}
+    total_fit_ls = 0.0
+    total_fit_mmse = 0.0
+
     with torch.no_grad():
         for inputs, targets, info, *rest in test_loader:
             batch_size = inputs.size(0)
+            total_samples += batch_size
+
+            inputs = inputs.to(device)
+            targets = targets.to(device)
+            masks = rest[0].to(device) if rest else None
 
             u_batch = info["u"].to(device)
             y_batch = info["y"].to(device)
             noise_var_batch = info["noise_variance"].to(device)
             kernel_matrix_batch = info["kernel_matrix"].to(device)
-            g_true_batch = targets.to(device)
-            masks = rest[0].to(device) if rest else None
 
+            # 1. Model Predictions & Metrics (Iterating dynamically)
+            preds_dict = {}
+            for crit, model in models.items():
+                preds, _ = model(inputs, masks)
+                preds_dict[crit] = preds
+
+                loss = loss_fn(preds, targets).item() * batch_size
+                total_loss[crit] += loss
+
+                metrics = strategy.compute_metrics(preds, targets)
+                total_fit[crit] += metrics["fit"] * batch_size
+
+            # 2. Baselines (LS & MMSE)
             ls_estimate, fit_ls_batch, best_order = compute_ls(
-                u_batch, y_batch, g_true_batch, test_loader.dataset.g_length
+                u_batch, y_batch, targets, test_loader.dataset.g_length
             )
             mmse_estimate, fit_mmse_batch = compute_mmse(
-                u_batch, y_batch, g_true_batch, noise_var_batch, kernel_matrix_batch
+                u_batch, y_batch, targets, noise_var_batch, kernel_matrix_batch
             )
-            model_acc_estimate, _ = model_acc(inputs.to(device), masks)
-            model_loss_estimate, _ = model_loss(inputs.to(device), masks)
 
             total_fit_ls += fit_ls_batch.sum().item()
             total_fit_mmse += fit_mmse_batch.sum().item()
-            total += batch_size
 
+            # 3. Store Results
             results_manager.update(
-                true_impulse_response=g_true_batch,
+                true_impulse_response=targets,
                 ls_estimate=ls_estimate,
                 mmse_estimate=mmse_estimate,
-                model_best_accuracy=model_acc_estimate,
-                model_best_loss=model_loss_estimate,
+                model_best_accuracy_estimate=preds_dict.get(ModelCriteria.ACC),
+                model_best_loss_estimate=preds_dict.get(ModelCriteria.LOSS),
                 best_order=best_order,
             )
 
-    average_fit_ls = total_fit_ls / max(total, 1)
-    average_fit_mmse = total_fit_mmse / max(total, 1)
+    # Averages
+    avg_loss = {crit: val / max(total_samples, 1) for crit, val in total_loss.items()}
+    avg_fit = {crit: val / max(total_samples, 1) for crit, val in total_fit.items()}
+    avg_fit_ls = total_fit_ls / max(total_samples, 1)
+    avg_fit_mmse = total_fit_mmse / max(total_samples, 1)
 
-    log.info("Evaluation LS and MMSE on the test set")
-    log.info(f"LS FIT: {average_fit_ls:.3f}")
-    log.info(f"MMSE FIT: {average_fit_mmse:.3f}")
+    # Logging
+    print("\n" + "=" * 60)
+    print(" " * 15 + "TEST SET EVALUATION SUMMARY")
+    print("=" * 60)
+
+    for crit in models:
+        crit_name = crit.name if hasattr(crit, "name") else str(crit).upper()
+        log.info(
+            f"Model (Best {crit_name:<4}) - Loss: {avg_loss[crit]:.5f}, FIT: {avg_fit[crit]:.3f}%"
+        )
+
+    log.info(f"Baseline LS       - FIT: {avg_fit_ls:.3f}%")
+    log.info(f"Baseline MMSE     - FIT: {avg_fit_mmse:.3f}%")
+    print("=" * 60 + "\n")
+
+    # Wandb Logging
+    wandb_dict = {
+        "test/ls_fit": avg_fit_ls,
+        "test/mmse_fit": avg_fit_mmse,
+    }
+    for crit in models:
+        crit_val = crit.value if hasattr(crit, "value") else str(crit).lower()
+        wandb_dict[f"test/model_{crit_val}_loss"] = avg_loss[crit]
+        wandb_dict[f"test/model_{crit_val}_fit"] = avg_fit[crit]
+
+    wandb_logger.log(wandb_dict)
 
     results_manager.save()
 
-    return average_fit_ls, average_fit_mmse
+
+def load_best_models(
+    cfg: DictConfig, device: torch.device, base_dir: Path
+) -> tuple[nn.Module, nn.Module]:
+    """Build and load the two best models (ACC and LOSS) saved in the base_dir."""
+    log.info("Loading best models (ACC and LOSS) for evaluation...")
+    ckpt_manager = CheckpointManager(base_dir)
+
+    model_acc = construct_model(cfg=cfg, device=device)
+    model_acc = ckpt_manager.load_best(model_acc, ModelCriteria.ACC)
+
+    model_loss = construct_model(cfg=cfg, device=device)
+    model_loss = ckpt_manager.load_best(model_loss, ModelCriteria.LOSS)
+
+    return model_acc, model_loss
 
 
 def _evaluate(model, loader, loss_fn, device, strategy=None, wandb_logger=None):
@@ -374,89 +556,6 @@ def _evaluate(model, loader, loss_fn, device, strategy=None, wandb_logger=None):
     avg_fit = fit / max(total, 1)
 
     return avg_loss, avg_fit
-
-
-def test(
-    cfg: DictConfig,
-    base_dir: Path,
-    device: torch.device,
-    test_loader: DataLoader,
-    wandb_logger: WandDBLogger,
-):
-    """Evaluate best models (by accuracy and by loss) on the test set.
-
-    Parameters:
-        cfg : DictConfig
-            Experiment configuration used to construct the model.
-        base_dir : Path
-            Directory containing the saved best model checkpoints.
-        device : torch.device
-            Device used for evaluation.
-        test_loader : DataLoader
-            DataLoader providing test batches.
-        wandb_logger : WandDBLogger
-            Logger instance for recording final test metrics.
-
-    Returns:
-        None: Logs test metrics and exits on missing checkpoints.
-    """
-
-    log.info(
-        "Testing best models (found during training) in terms of loss and accuracy"
-    )
-
-    ckpt_manager = CheckpointManager(base_dir)
-
-    model_acc = construct_model(cfg=cfg, device=device)
-    model_loss = construct_model(cfg=cfg, device=device)
-
-    model_acc = ckpt_manager.load_best(model_acc, "acc")
-    model_loss = ckpt_manager.load_best(model_loss, "loss")
-
-    total_params = sum(p.numel() for p in model_acc.parameters())
-    log.info(f"Number of parameters: {total_params}")
-
-    strategy_acc = make_strategy(cfg)
-    strategy_acc.setup_for_eval(model_acc)
-    loss_function = strategy_acc.loss_fn()
-
-    test_loss_a, test_fit_a = _evaluate(
-        model_acc,
-        test_loader,
-        loss_function,
-        device,
-        strategy=strategy_acc,
-        wandb_logger=wandb_logger,
-    )
-
-    strategy_loss = make_strategy(cfg)
-    strategy_loss.setup_for_eval(model_loss)
-    test_loss_l, test_fit_l = _evaluate(
-        model_loss,
-        test_loader,
-        loss_function,
-        device,
-        strategy=strategy_loss,
-        wandb_logger=wandb_logger,
-    )
-
-    log.info(
-        f"Best Model (by Accuracy) - Loss: {test_loss_a:.5f}, FIT: {test_fit_a:.3f}"
-    )
-
-    log.info(f"Best Model (by Loss) - Loss: {test_loss_l:.5f}, FIT: {test_fit_l:.3f}")
-
-    compute_ls_mmse(
-        test_loader=test_loader,
-        device=device,
-        model_acc=model_acc,
-        model_loss=model_loss,
-        base_dir=base_dir,
-    )
-
-    if not cfg.save_model:
-        ckpt_manager.delete_best_models()
-        log.info("Deleted best models.")
 
 
 if __name__ == "__main__":

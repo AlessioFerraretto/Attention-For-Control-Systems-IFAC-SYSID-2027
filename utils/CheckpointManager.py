@@ -9,17 +9,16 @@ evaluate model quality.
 
 import logging
 from pathlib import Path
-from typing import Literal
 
 import torch
 from torch import nn
 from torch.optim import Optimizer
 from torch.utils.data import DataLoader
 
+from utils import ModelCriteria
 from utils.SeedManager import SeedManager
 
 log = logging.getLogger("script")
-BestCriteria = Literal["acc", "loss"]
 
 
 class CheckpointManager:
@@ -88,7 +87,7 @@ class CheckpointManager:
     def save_best(
         self,
         model: nn.Module,
-        criteria: BestCriteria,
+        criteria: ModelCriteria,
         opt: Optimizer,
         loss: float,
         accuracy: float,
@@ -136,7 +135,7 @@ class CheckpointManager:
             f=model_path,
         )
 
-    def load_best(self, model: nn.Module, criteria: BestCriteria) -> nn.Module:
+    def load_best(self, model: nn.Module, criteria: ModelCriteria) -> nn.Module:
         """Load the best checkpoint for a criterion into the provided model.
 
         Parameters:
@@ -159,6 +158,36 @@ class CheckpointManager:
         log.info(f"Loaded: {files[0]}")
         checkpoint = torch.load(f=files[0], weights_only=False)
         model.load_state_dict(checkpoint["model_state_dict"])
+        return model
+
+    def load_checkpoint(self, model: nn.Module, checkpoint_path: Path) -> nn.Module:
+        """Load a specific checkpoint from a given path into the provided model.
+
+        Parameters:
+          model : nn.Module
+            Model instance that receives the checkpoint weights.
+          checkpoint_path : Path
+            Exact path to the checkpoint file to load.
+
+        Returns:
+          nn.Module: The same model instance after loading the checkpoint state.
+
+        Raises:
+          FileNotFoundError: Raised when the specified checkpoint file does not exist.
+        """
+        if not checkpoint_path.exists():
+            log.error(f"Checkpoint file not found: {checkpoint_path}")
+            raise FileNotFoundError(f"Checkpoint file not found: {checkpoint_path}")
+
+        log.info(f"Loaded: {checkpoint_path}")
+        checkpoint = torch.load(f=checkpoint_path, weights_only=False)
+
+        # Handle both custom wrapper dictionaries and raw state_dicts
+        if isinstance(checkpoint, dict) and "model_state_dict" in checkpoint:
+            model.load_state_dict(checkpoint["model_state_dict"])
+        else:
+            model.load_state_dict(checkpoint)
+
         return model
 
     def delete_best_models(self):

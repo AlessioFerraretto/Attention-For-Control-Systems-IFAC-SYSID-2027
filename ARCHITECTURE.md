@@ -30,29 +30,50 @@ TODO
 
 ## 2. High-Level Workflow
 
-The main entry point is `training_script.py`, which uses Hydra to load configuration from `configs/config.yaml` and experiment-specific YAML file.
+## 2. High-Level Workflow
+
+The main entry point is `training_script.py`, which uses Hydra to load configuration from `configs/config.yaml` and experiment-specific YAML files.
+
 The workflow is as follows:
 
-1. The training entrypoint `training_script.py` loads Hydra configuration and sets up the runtime environment.
-2. The script configures the random seeds for reproducibility (via SeedManager), initializes the Weights & Biases logger (WandDBLogger), determines the optimal hardware device (get_torch_device), and builds the PyTorch DataLoaders for the training, validation, and test splits.
-3. Execution Mode Selection (Train, Resume, or Inference): The script checks the configuration for specific flags to dictate the run mode:
+1. **Environment Setup:** The entry point loads the Hydra configuration, seeds the random number generators for reproducibility (via `SeedManager`), initializes the Weights & Biases logger (`WandDBLogger`), determines the optimal hardware device (`get_torch_device`), and builds the PyTorch DataLoaders for the training, validation, and test splits.
+2. **Model Initialization (`model_mode`):** The script checks the `model_mode` parameter to determine how the model weights are initialized:
+   - **`new`:** Initializes a fresh model from scratch based on the defined architecture and strategy.
+   - **`load`:** Initializes the model and loads pre-trained weights from the exact file path specified by the `model_path` parameter via the `CheckpointManager`.
+3. **Execution Mode Selection (`running_mode`):** The script dictates the execution flow based on the `running_mode` parameter:
+   - **`training`:** Executes the full training loop.
+     - _Resuming:_ If a valid `resume_checkpoint` path is provided in the config, it restores the optimizer state, starting epoch, RNG states, and previous best metrics before resuming the loop.
+     - _Validation & Checkpointing:_ After each epoch, the model is evaluated on the validation set. The `CheckpointManager` monitors metrics and saves standard checkpoints, alongside distinct "best" models based on both the highest validation accuracy and the lowest validation loss. Early stopping triggers if the target FIT metric is reached.
+     - _Testing:_ Once training concludes, it automatically loads the "best" models and runs the testing and baseline evaluation phase.
+   - **`inference`:** Skips training entirely. It evaluates the current model directly on the test dataset. (Typically used in conjunction with `model_mode=load`).
+   - **`diagnostic`:** Executes a diagnostic evaluation across the Training, Validation, and Test sets sequentially. It computes the FIT for each split to verify whether the model is exhibiting "benign interpolation" (memorizing the finite training sample) or acting as a population Bayes estimator.
+4. **Testing and Baseline Evaluation:** During `training` or `inference` modes, the script concludes by running the `test()` function. It evaluates the model against the test dataset, computes baseline statistical estimates (Least Squares and MMSE baselines), and logs the final comparative metrics via WandB before exiting. Optionally, it cleans up the saved models if `save_model` is set to false.
 
-- Standard Training: If no special flags are set, it initializes a fresh model and optimizer based on the defined strategy and begins training from epoch 1.
-- Resuming Training (resume_checkpoint): If a valid path is provided to resume_checkpoint in the configuration, the script loads the model weights, optimizer state, starting epoch, and previous best metrics. Important: When resuming training, you must ensure that the Hydra configuration used matches the exact configuration that created the checkpoint. Altering model architecture, dataset parameters, or strategy configurations will cause dimension mismatches or undefined behavior.
-- Inference-Only Mode (inference=True): If the inference flag is set to True, the entire training process is skipped. This is designed for evaluating previously fully trained models.
+**Execution Examples:**
 
-4. Training Loop and Validation (if applicable): The model iterates through the training data, utilizing the customized strategy to inject specific logic. After each epoch, the model is evaluated on the validation set. The CheckpointManager monitors the validation metrics and automatically saves standard checkpoints, as well as distinct "best" models based on both the highest validation accuracy and the lowest validation loss. Early stopping is triggered if the target fit metric is reached.
-5. Testing and Evaluation: Regardless of whether the script ran a full training loop or was launched in inference=True mode, it concludes by executing the test() function.
-   The CheckpointManager loads the two optimal models: one prioritizing accuracy (best_model_acc) and the other prioritizing loss (best_model_loss).
-   Important for Inference Mode: If you are running with inference=True, you must ensure that the pre-trained best model files are correctly placed in the corresponding Hydra output folder (base_dir) so the CheckpointManager can find and load them.
-   The script evaluates both best models against the test dataset, computes baseline statistical estimates (LS and MMSE baselines), and logs the final comparative metrics via WandB before exiting. Optionally, it cleans up the saved models if save_model is set to false.
-   computes loss, and updates weights.
+**Standard Training (Fresh Model):**
 
-Examples:
+```bash
+python -m training_script running_mode=training model_mode=new experiment=dynamic-impulse-response-prediction
+```
 
-- python -m training_script experiment=dynamic-impulse-response-prediction
-- python -m training_script experiment=dynamic-impulse-response-prediction resume_checkpoint="saved_models/my_model.pt"
-- python -m training_script experiment=dynamic-impulse-response-prediction inference=True
+**Resume Interrupted Training:**
+
+```bash
+python -m training_script running_mode=training model_mode=new resume_checkpoint="outputs/checkpoints/model.pt" experiment=dynamic-impulse-response-prediction
+```
+
+**Inference-Only (Evaluate a Pre-trained Model):**
+
+```bash
+python -m training_script running_mode=inference model_mode=load model_path="'/path/to/best_model.pt'" experiment=dynamic-impulse-response-prediction
+```
+
+**Diagnostic Evaluation (Train/Val/Test FIT checks):**
+
+```bash
+python -m training_script running_mode=diagnostic model_mode=load model_path="'saved_models/best_model.pt'" experiment=dynamic-impulse-response-prediction-snr3-10-4-64-16
+```
 
 ## 3. Configuration and Experiment Management
 

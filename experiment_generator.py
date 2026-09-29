@@ -87,9 +87,9 @@ wandb:
 
 
 # Define the parameter grids
-VAR_1 = [4, 8, 16]
-VAR_2 = [64, 128, 256]
-VAR_3 = [4, 8, 16, 32]
+VAR_1 = [4, 8]
+VAR_2 = [64, 128]
+VAR_3 = [16, 32]
 # Create an output directory so we don't clutter the root folder
 output_dir = "configs/experiment/bulk/"
 
