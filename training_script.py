@@ -83,7 +83,7 @@ def main(cfg: DictConfig):
             model_path_str = cfg.get("model_path")
             if not model_path_str:
                 log.error(
-                    "You must specify the model path. Example: model_path='outputs/best_model_loss.pt'"
+                    "You must specify the model path. Example: model_path='outputs/model.pt'"
                 )
                 sys.exit(1)
 
@@ -128,6 +128,7 @@ def main(cfg: DictConfig):
                 base_dir=base_dir,
                 wandb_logger=wandb_logger,
             )
+
         case "diagnostic":
             diagnostic(
                 model=model,
@@ -309,15 +310,17 @@ def training(
         if cfg.save_checkpoints:
             ckpt_manager.save_checkpoint(epoch, model, opt, val_loss, fit)
 
-        # Save best model in terms of accuracy (override the previous one)
+        # Save best model in terms of accuracy
         if fit > best_fit:
             best_fit = fit
-            ckpt_manager.save_best(model, "acc", opt, val_loss, fit)
+            # CHANGE "acc" to ModelCriteria.ACC
+            ckpt_manager.save_best(model, ModelCriteria.ACC, opt, val_loss, fit)
 
         # Save best model in terms of loss
         if val_loss < best_val_loss:
             best_val_loss = val_loss
-            ckpt_manager.save_best(model, "loss", opt, val_loss, fit)
+            # CHANGE "loss" to ModelCriteria.LOSS
+            ckpt_manager.save_best(model, ModelCriteria.LOSS, opt, val_loss, fit)
 
     log.info("Training complete.")
 

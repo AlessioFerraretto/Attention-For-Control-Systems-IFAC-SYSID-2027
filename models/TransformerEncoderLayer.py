@@ -136,7 +136,8 @@ class TransformerEncoderLayer(TrackableModule):
 
         return hidden
 
-    def forward_da_provare(self, hidden, mask=None):
+    # Pre-Norm forward pass: the normalization is applied before the residual connection.
+    def forward_pre_norm(self, hidden, mask=None):
         """Apply the encoder block to a sequence of hidden states.
 
         Parameters:

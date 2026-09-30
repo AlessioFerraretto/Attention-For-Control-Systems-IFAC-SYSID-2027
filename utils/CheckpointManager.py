@@ -115,7 +115,7 @@ class CheckpointManager:
         Returns:
           None: This method removes any previous best-model artifact and writes a new one.
         """
-        for path in self.base_dir.glob(f"best_model_{criteria}*.pt"):
+        for path in self.base_dir.glob(f"best_model_{criteria.value}*.pt"):
             log.debug(f"Removing previous best: {path}")
             path.unlink()
 
@@ -141,7 +141,7 @@ class CheckpointManager:
         Parameters:
           model : nn.Module
             Model instance that receives the checkpoint weights.
-          criteria : BestCriteria
+          criteria : ModelCriteria
             Criterion name used to find the best-model artifact.
 
         Returns:
@@ -150,10 +150,13 @@ class CheckpointManager:
         Raises:
           FileNotFoundError: Raised when no best-model checkpoint exists for the requested criterion.
         """
-        files = list(self.base_dir.glob(f"best_model_{criteria}*.pt"))
+        # USE criteria.value TO EXTRACT "acc" OR "loss" FROM THE ENUM
+        criteria_str = criteria.value
+
+        files = list(self.base_dir.glob(f"best_model_{criteria_str}*.pt"))
         if not files:
-            log.error(f"Best {criteria} model not found in {self.base_dir}")
-            raise FileNotFoundError(f"Best model for {criteria} not found.")
+            log.error(f"Best {criteria_str} model not found in {self.base_dir}")
+            raise FileNotFoundError(f"Best model for {criteria_str} not found.")
 
         log.info(f"Loaded: {files[0]}")
         checkpoint = torch.load(f=files[0], weights_only=False)

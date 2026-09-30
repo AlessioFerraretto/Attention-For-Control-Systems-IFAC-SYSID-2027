@@ -138,7 +138,6 @@ def compute_hutchinson_df_and_sure(
 ):
     """
     Computes the effective Degrees of Freedom (df) and SURE estimate using Hutchinson's stochastic trace method.
-    Addresses Hypothesis/Point 3 from Pillonetto's diagnostic notes.
     """
     B, n = y.shape
     device = y.device
