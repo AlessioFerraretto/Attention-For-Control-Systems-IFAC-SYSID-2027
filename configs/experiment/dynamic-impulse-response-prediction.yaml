@@ -1,15 +1,15 @@
 # @package _global_
 
 transformer_seed: 1
-data_seed: 2
+data_seed: 1
 
-epochs: 2
+epochs: 50
 learning_rate: 1e-3
-eval_every: 2
+eval_every: 50
 
-training_batch_size: 16
-validation_batch_size: 16
-test_batch_size: 16
+training_batch_size: 64
+validation_batch_size: 64
+test_batch_size: 64
 
 save_model: True
 save_checkpoints: True
@@ -21,12 +21,12 @@ model:
   embedding: transformer-positional-encoding # Embedding type
   layer_name: transformer-encoder-layer # Name of the layer used
   out_layer: token-wise-readout-for-impulse-response-prediction # Output layer type
-  num_layers: 2
+  num_layers: 4
 
   # Layer parameters
   input_dim: 2
-  model_dim: 32
-  num_heads: 4
+  model_dim: 64
+  num_heads: 16
   output_dim: ${model.model_dim}
   activation_function: gelu
   dropout: 0.1
@@ -49,16 +49,17 @@ dataset:
   description: stable spline kernel generator of the type [ [u, y], padding] -> [g]
 
   shuffle: False # The sequences are already generated randomly
+  kernel: "gaussian"
 
-  batches_per_epoch: 100
+  batches_per_epoch: 1000
 
-  g_length: 4
+  g_length: 64
   n: 100
   n_past: 0
   n_future: "${dataset.n}"
   c_min: 0.0001
   c_max: 1.0
-  alpha_min: 0.7
+  alpha_min: 0.70
   alpha_max: 0.95
   snr_min: 3
   snr_max: 10

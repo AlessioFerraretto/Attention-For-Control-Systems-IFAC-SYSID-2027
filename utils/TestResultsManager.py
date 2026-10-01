@@ -39,7 +39,12 @@ class TestResultsManager:
           None: The tensors are detached and moved to CPU before being appended.
         """
         for key, value in kwargs.items():
-            self.results[key].append(value.detach().cpu())
+            # Only process and store the value if it actually exists
+            if value is not None:
+                # Ensure the list exists for this key before appending
+                if key not in self.results:
+                    self.results[key] = []
+                self.results[key].append(value.detach().cpu())
 
     def save(self, filename="test_impulse_responses.pt"):
         """Concatenate all collected tensors and write them to disk.

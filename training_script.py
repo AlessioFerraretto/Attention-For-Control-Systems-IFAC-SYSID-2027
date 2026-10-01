@@ -34,7 +34,12 @@ from monitor.WandDBLogger import WandDBLogger
 from training_strategies.Factory import make_strategy
 from utils.CheckpointManager import CheckpointManager
 from utils.Environment import get_job_id, get_torch_device
-from utils.Estimators import compute_hutchinson_df_and_sure, compute_ls, compute_mmse
+from utils.Estimators import (
+    compute_hutchinson_df_and_sure,
+    compute_ls,
+    compute_mmse,
+    compute_mmse_df_and_sure,
+)
 from utils.ModelCriteria import ModelCriteria
 from utils.SeedManager import SeedManager
 from utils.TestResultsManager import TestResultsManager
@@ -423,13 +428,13 @@ def evaluate_test_set(
     total_samples = 0
     total_loss = {crit: 0.0 for crit in models}
     total_fit = {crit: 0.0 for crit in models}
-
-    # --- NEW COUNTERS FOR SURE AND DEGREES OF FREEDOM ---
     total_df = {crit: 0.0 for crit in models}
     total_sure = {crit: 0.0 for crit in models}
 
     total_fit_ls = 0.0
     total_fit_mmse = 0.0
+    total_df_mmse = 0.0
+    total_sure_mmse = 0.0
 
     with torch.no_grad():
         for inputs, targets, info, *rest in test_loader:
@@ -481,19 +486,26 @@ def evaluate_test_set(
                 u_batch, y_batch, targets, noise_var_batch, kernel_matrix_batch
             )
 
+            # --- COMPUTE EXACT DF AND SURE FOR MMSE BASELINE ---
+            df_mmse_batch, sure_mmse_batch = compute_mmse_df_and_sure(
+                u_batch, y_batch, noise_var_batch, kernel_matrix_batch, g_length
+            )
+
             total_fit_ls += fit_ls_batch.sum().item()
             total_fit_mmse += fit_mmse_batch.sum().item()
+            total_df_mmse += df_mmse_batch.sum().item()
+            total_sure_mmse += sure_mmse_batch.sum().item()
 
             # 3. Store Results
-            if cfg.get("running_mode") == "training":
-                results_manager.update(
-                    true_impulse_response=targets,
-                    ls_estimate=ls_estimate,
-                    mmse_estimate=mmse_estimate,
-                    model_best_accuracy_estimate=preds_dict.get(ModelCriteria.ACC),
-                    model_best_loss_estimate=preds_dict.get(ModelCriteria.LOSS),
-                    best_order=best_order,
-                )
+            results_manager.update(
+                true_impulse_response=targets,
+                ls_estimate=ls_estimate,
+                mmse_estimate=mmse_estimate,
+                model_best_accuracy_estimate=preds_dict.get(ModelCriteria.ACC),
+                model_best_loss_estimate=preds_dict.get(ModelCriteria.LOSS),
+                model_inference_estimate=preds_dict.get(ModelCriteria.INF),
+                best_order=best_order,
+            )
 
     # Averages
     avg_loss = {crit: val / max(total_samples, 1) for crit, val in total_loss.items()}
@@ -503,6 +515,8 @@ def evaluate_test_set(
 
     avg_fit_ls = total_fit_ls / max(total_samples, 1)
     avg_fit_mmse = total_fit_mmse / max(total_samples, 1)
+    avg_df_mmse = total_df_mmse / max(total_samples, 1)
+    avg_sure_mmse = total_sure_mmse / max(total_samples, 1)
 
     # Logging
     print("\n" + "=" * 90)
@@ -516,13 +530,17 @@ def evaluate_test_set(
         )
 
     log.info(f"Baseline LS   - FIT: {avg_fit_ls:>6.3f}%")
-    log.info(f"Baseline MMSE - FIT: {avg_fit_mmse:>6.3f}%")
+    log.info(
+        f"Baseline MMSE - FIT: {avg_fit_mmse:>6.3f}%, DF: {avg_df_mmse:>7.2f}, SURE: {avg_sure_mmse:>8.4f}"
+    )
     print("=" * 90 + "\n")
 
     # Wandb Logging
     wandb_dict = {
         "test/ls_fit": avg_fit_ls,
         "test/mmse_fit": avg_fit_mmse,
+        "test/mmse_df": avg_df_mmse,
+        "test/mmse_sure": avg_sure_mmse,
     }
     for crit in models:
         crit_val = crit.value if hasattr(crit, "value") else str(crit).lower()
@@ -533,8 +551,61 @@ def evaluate_test_set(
 
     wandb_logger.log(wandb_dict)
 
-    if cfg.get("running_mode") == "training":
-        results_manager.save()
+    verify_sure_ranking(
+        models=models,
+        avg_sure=avg_sure,
+        avg_fit=avg_fit,
+        avg_fit_mmse=avg_fit_mmse,
+        avg_sure_mmse=avg_sure_mmse,
+    )
+    results_manager.save()
+
+
+def verify_sure_ranking(
+    models, avg_sure, avg_fit, avg_fit_mmse=None, avg_sure_mmse=None
+):
+    # --- VERIFY SURE RANKING VS TRUE FIT RANKING ---
+    sure_values = {}
+    fit_values = {}
+
+    # 1. Add Transformer models
+    for crit in models:
+        crit_name = crit.name if hasattr(crit, "name") else str(crit).upper()
+        sure_values[f"Transformer_{crit_name}"] = avg_sure[crit]
+        fit_values[f"Transformer_{crit_name}"] = avg_fit[crit]
+
+    # 2. Add MMSE baseline (competing estimator)
+    if avg_sure_mmse is not None and avg_fit_mmse is not None:
+        sure_values["MMSE"] = avg_sure_mmse
+        fit_values["MMSE"] = avg_fit_mmse
+
+    # 3. Sort rankings
+    # SURE: ascending order (lowest risk is best)
+    ranked_by_sure = sorted(sure_values.keys(), key=lambda k: sure_values[k])
+
+    # FIT: descending order (highest precision is best)
+    ranked_by_fit = sorted(fit_values.keys(), key=lambda k: fit_values[k], reverse=True)
+
+    # 4. Print verdict
+    print("\n" + "-" * 90)
+    print(" " * 20 + "SURE RANKING vs TRUE FIT RANKING (Point V)")
+    print("-" * 90)
+    log.info(f"Ranking by SURE (lowest risk best): {ranked_by_sure}")
+    log.info(f"Ranking by TRUE FIT (highest best): {ranked_by_fit}")
+
+    if ranked_by_sure == ranked_by_fit:
+        log.info(
+            "-> VERDICT: SUCCESS! The SURE ranking PERFECTLY AGREES with the true prediction error."
+        )
+    elif ranked_by_sure[0] == ranked_by_fit[0]:
+        log.info(
+            "-> VERDICT: PARTIAL AGREEMENT. SURE correctly identified the BEST estimator, but the remaining order differs."
+        )
+    else:
+        log.info(
+            "-> VERDICT: DISAGREEMENT. The SURE ranking does NOT match the true prediction error."
+        )
+    print("-" * 90 + "\n")
 
 
 def load_best_models(

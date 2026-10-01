@@ -35,6 +35,7 @@ class DynamicImpulseResponsePrediction(Dataset):
         self.input_dim = cfg.model.input_dim
         self.filter_type = cfg.dataset.filter_type
         self.a_param = cfg.dataset.a_param
+        self.kernel = cfg.dataset.kernel
 
     def __len__(self):
         return self.batches_per_epoch * self.batch_size
@@ -62,6 +63,7 @@ class DynamicImpulseResponsePrediction(Dataset):
             self.jitter_regularization_parameter,
             self.filter_type,
             self.a_param,
+            kernel=self.kernel,
         )
 
         # Splitting

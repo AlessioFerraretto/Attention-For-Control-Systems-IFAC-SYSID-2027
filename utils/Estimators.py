@@ -185,3 +185,44 @@ def compute_hutchinson_df_and_sure(
 
     # Return detached estimates for safe logging and accumulation
     return df_estimate.detach(), sure_estimate.detach()
+
+
+def compute_mmse_df_and_sure(u, y, noise_var, K, g_length):
+    """
+    Computes the exact Degrees of Freedom (df) and SURE estimate for the Bayesian MMSE estimator.
+    """
+    B, n = y.shape
+    device = y.device
+
+    # 1. Costruisci la matrice di Toeplitz U per il batch
+    u_padded = torch.nn.functional.pad(u, (g_length - 1, 0))
+    U = u_padded.unfold(dimension=1, size=g_length, step=1)
+    U = torch.flip(U, dims=[2])  # Shape: (B, n, g_length)
+    U_T = U.transpose(1, 2)  # Shape: (B, g_length, n)
+
+    # 2. Calcola U K U'
+    UK = torch.bmm(U, K)
+    UKUT = torch.bmm(UK, U_T)  # Shape: (B, n, n)
+
+    # 3. Aggiungi la varianza del rumore sulla diagonale (\sigma^2 I)
+    I = torch.eye(n, device=device).unsqueeze(0).expand(B, n, n)
+    sigma2_I = noise_var.view(B, 1, 1) * I
+
+    # 4. Risolvi il sistema per trovare la matrice di proiezione H = U K U' (U K U' + \sigma^2 I)^(-1)
+    # Usiamo torch.linalg.solve per stabilità numerica (risolve AX = B).
+    # Essendo matrici simmetriche, equivale a calcolare l'inversa.
+    H = torch.linalg.solve(UKUT + sigma2_I, UKUT)
+
+    # 5. I gradi di libertà esatti sono la traccia della matrice H
+    df_estimate = torch.diagonal(H, dim1=-2, dim2=-1).sum(-1)
+
+    # 6. Calcola \hat{y} e SURE
+    # \hat{y} = H y
+    y_hat = torch.bmm(H, y.unsqueeze(-1)).squeeze(-1)
+    residuals_sq = torch.sum((y - y_hat) ** 2, dim=1)
+
+    sure_estimate = (
+        residuals_sq + 2 * noise_var.squeeze() * df_estimate - n * noise_var.squeeze()
+    )
+
+    return df_estimate.detach(), sure_estimate.detach()

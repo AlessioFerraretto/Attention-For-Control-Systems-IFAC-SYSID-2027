@@ -5,6 +5,10 @@ import os
 TEMPLATE = """
 # @package _global_
 
+running_mode: inference
+model_mode: load
+model_path: "/home/ferraretto/Desktop/Attention For Control Systems/saved_models/model_VAR_1_VAR_2_VAR_3.pt"
+
 transformer_seed: 1
 data_seed: 1
 
@@ -17,7 +21,7 @@ validation_batch_size: 64
 test_batch_size: 64
 
 save_model: True
-save_checkpoints: True
+save_checkpoints: False
 
 model:
   description: a transformer architecture
@@ -53,6 +57,8 @@ dataset:
   name: dynamic-impulse-response-prediction
   description: stable spline kernel generator of the type [ [u, y], padding] -> [g]
 
+  kernel: "stable-spline"
+
   shuffle: False # The sequences are already generated randomly
 
   batches_per_epoch: 1000
@@ -63,7 +69,7 @@ dataset:
   n_future: "${dataset.n}"
   c_min: 0.0001
   c_max: 1.0
-  alpha_min: 0.7
+  alpha_min: 0.70
   alpha_max: 0.95
   snr_min: 3
   snr_max: 10

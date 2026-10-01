@@ -19,7 +19,9 @@ def generate_stable_spline_kernel(impulse_length, c, alpha):
     return c * (alpha**max_indices)
 
 
-def sample_system_impulse_response(g_length, c, alpha, jitter_regularization_parameter):
+def sample_stable_spline_impulse_response(
+    g_length, c, alpha, jitter_regularization_parameter
+):
     """Sample the stable spline hyperparameters and impulse response 'g'.
 
     Call this ONCE per system you want to identify (e.g., in Dataset __init__)
@@ -31,6 +33,35 @@ def sample_system_impulse_response(g_length, c, alpha, jitter_regularization_par
     g = SeedManager().dataset_multivariate_normal(K_eta + jitter)
 
     return g, {"c": c, "alpha": alpha}
+
+
+def generate_gaussian_kernel(impulse_length, c, eta):
+    """Generate a Gaussian (RBF) covariance matrix using PyTorch.
+    Formula: K_{i,j} = c * exp(-eta * (i-j)^2)
+    """
+    idx = torch.arange(1, impulse_length + 1, dtype=torch.float)
+    dist_sq = (idx[:, None] - idx[None, :]) ** 2
+
+    return c * torch.exp(-eta * dist_sq)
+
+
+def sample_gaussian_impulse_response(
+    g_length, c, alpha, jitter_regularization_parameter
+):
+    """Sample the Gaussian kernel hyperparameters and impulse response 'g'."""
+    eta = alpha  # For Gaussian kernel, we can use 'alpha' as 'eta'
+    K_eta = generate_gaussian_kernel(g_length, c, eta)
+    jitter = torch.eye(g_length) * jitter_regularization_parameter
+
+    g = SeedManager().dataset_multivariate_normal(K_eta + jitter)
+
+    return g, {"c": c, "eta": eta}
+
+
+KERNELS = {
+    "stable_spline": sample_stable_spline_impulse_response,
+    "gaussian": sample_gaussian_impulse_response,
+}
 
 
 def simulate_io_data(g, n, snr_min, snr_max, filter_type, a_param):
@@ -112,6 +143,7 @@ def generate_stable_spline(
     jitter_regularization_parameter,
     filter_type,
     a_param,
+    kernel="stable_spline",
 ):
     """Generate a synthetic system identification problem.
 
@@ -120,7 +152,7 @@ def generate_stable_spline(
     n = n_past + n_future
 
     # 1. Sample the system physics
-    g, system_params = sample_system_impulse_response(
+    g, system_params = KERNELS.get(kernel)(
         g_length, c, alpha, jitter_regularization_parameter
     )
 
