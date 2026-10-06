@@ -86,16 +86,16 @@ def compute_mmse(
     true_impulse_batch: torch.Tensor,
     noise_variance_batch: torch.Tensor,
     matrix_kernel_batch: torch.Tensor,
+    g_length: int,
 ):
     """Computes the Minimum Mean Square Error (MMSE) for the entire batch simultaneously."""
     batch_size, sequence_length = input_batch.shape
-    impulse_length = matrix_kernel_batch.shape[-1]
 
     matrix_phi = build_matrix_phi_batched(
-        input_batch, impulse_length
-    )  # [batch_size, sequence_length, impulse_length]
+        input_batch, g_length
+    )  # [batch_size, sequence_length, g_length]
 
-    # Batched matrix multiplication (@ automatically handles batches in PyTorch)
+    # Batched matrix multiplication
     # transpose(1, 2) transposes only the matrix dimensions, leaving batch_size intact
     matrix_phi_kernel_phi_transposed = (
         matrix_phi @ matrix_kernel_batch @ matrix_phi.transpose(1, 2)

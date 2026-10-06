@@ -3,7 +3,7 @@ from collections.abc import Callable
 import torch
 
 from models.ScaleInvariantLoss import ScaleInvariantLoss
-from utils.Estimators import compute_impulseest
+from utils.Estimators import compute_mmse
 from utils.StableSplineGenerator import BATCHED_KERNELS
 
 
@@ -36,8 +36,8 @@ class KernelParametersPrediction:
         K_hat = BATCHED_KERNELS[self.kernel_type](g_length, c_param, param1)
 
         # Compute estimated impulse response from predicted kernel parameters
-        _, fit_g_batch = compute_impulseest(
-            u_batch, y_batch, true_g, noise_var_batch, K_hat
+        g_hat, fit_g_batch = compute_mmse(
+            u_batch, y_batch, true_g, noise_var_batch, K_hat, g_length
         )
 
         mean_fit = fit_g_batch.mean()

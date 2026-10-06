@@ -487,7 +487,7 @@ def evaluate_test_set(
                 u_batch, y_batch, true_g, g_length
             )
             mmse_estimate, fit_mmse_batch = compute_mmse(
-                u_batch, y_batch, true_g, noise_var_batch, matrix_kernel_batch
+                u_batch, y_batch, true_g, noise_var_batch, matrix_kernel_batch, g_length
             )
             impulseest_estimate, fit_impulseest_batch = compute_impulseest(
                 u_batch, y_batch, true_g, noise_var_batch, matrix_kernel_batch
