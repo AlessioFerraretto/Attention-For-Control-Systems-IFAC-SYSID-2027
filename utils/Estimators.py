@@ -1,4 +1,8 @@
+import logging
+
 import torch
+
+log = logging.getLogger("script")
 
 
 def build_matrix_phi_batched(
@@ -194,30 +198,30 @@ def compute_mmse_df_and_sure(u, y, noise_var, K, g_length):
     B, n = y.shape
     device = y.device
 
-    # 1. Costruisci la matrice di Toeplitz U per il batch
+    # 1. Build the Toeplitz matrix U for the batch
     u_padded = torch.nn.functional.pad(u, (g_length - 1, 0))
     U = u_padded.unfold(dimension=1, size=g_length, step=1)
     U = torch.flip(U, dims=[2])  # Shape: (B, n, g_length)
     U_T = U.transpose(1, 2)  # Shape: (B, g_length, n)
 
-    # 2. Calcola U K U'
+    # 2. Compute U K U'
     UK = torch.bmm(U, K)
     UKUT = torch.bmm(UK, U_T)  # Shape: (B, n, n)
 
-    # 3. Aggiungi la varianza del rumore sulla diagonale (\sigma^2 I)
+    # 3. Add the noise variance to the diagonal (sigma^2 I)
     I = torch.eye(n, device=device).unsqueeze(0).expand(B, n, n)
     sigma2_I = noise_var.view(B, 1, 1) * I
 
-    # 4. Risolvi il sistema per trovare la matrice di proiezione H = U K U' (U K U' + \sigma^2 I)^(-1)
-    # Usiamo torch.linalg.solve per stabilità numerica (risolve AX = B).
-    # Essendo matrici simmetriche, equivale a calcolare l'inversa.
+    # 4. Solve the system to obtain the projection matrix H = U K U' (U K U' + sigma^2 I)^(-1)
+    # Use torch.linalg.solve for numerical stability (solve AX = B).
+    # Since the matrices are symmetric, this is equivalent to computing the inverse.
     H = torch.linalg.solve(UKUT + sigma2_I, UKUT)
 
-    # 5. I gradi di libertà esatti sono la traccia della matrice H
+    # 5. The exact degrees of freedom are the trace of matrix H
     df_estimate = torch.diagonal(H, dim1=-2, dim2=-1).sum(-1)
 
-    # 6. Calcola \hat{y} e SURE
-    # \hat{y} = H y
+    # 6. Compute y_hat and SURE
+    # y_hat = H y
     y_hat = torch.bmm(H, y.unsqueeze(-1)).squeeze(-1)
     residuals_sq = torch.sum((y - y_hat) ** 2, dim=1)
 
@@ -226,3 +230,88 @@ def compute_mmse_df_and_sure(u, y, noise_var, K, g_length):
     )
 
     return df_estimate.detach(), sure_estimate.detach()
+
+
+def compute_ls_df_and_sure(u, y, noise_var, ls_estimate, best_order):
+    """
+    Computes the Degrees of Freedom (df) and SURE estimate for the Least Squares estimator.
+    For LS, the degrees of freedom exactly match the chosen model order.
+    """
+    B, n = y.shape
+    g_length = ls_estimate.shape[-1]
+
+    # 1. The degrees of freedom for LS match the number of estimated parameters (the order)
+    df_estimate = best_order.float()
+
+    # 2. Calculate y_hat = U * g_hat using the Toeplitz matrix approach
+    u_padded = torch.nn.functional.pad(u, (g_length - 1, 0))
+    U = u_padded.unfold(dimension=1, size=g_length, step=1)
+    U = torch.flip(U, dims=[2])
+
+    y_hat = torch.bmm(U, ls_estimate.unsqueeze(-1)).squeeze(-1)  # Shape: (B, n)
+
+    # 3. Compute SURE Risk estimate: ||y - y_hat||^2 + 2 * \sigma^2 * df - n * \sigma^2
+    residuals_sq = torch.sum((y - y_hat) ** 2, dim=1)
+    sure_estimate = (
+        residuals_sq + 2 * noise_var.squeeze() * df_estimate - n * noise_var.squeeze()
+    )
+
+    return df_estimate.detach(), sure_estimate.detach()
+
+
+def verify_sure_ranking(
+    models,
+    avg_sure,
+    avg_fit,
+    avg_fit_mmse,
+    avg_sure_mmse,
+    avg_fit_ls,
+    avg_sure_ls,
+):
+    # --- VERIFY SURE RANKING VS TRUE FIT RANKING ---
+    sure_values = {}
+    fit_values = {}
+
+    # 1. Add Transformer models
+    for crit in models:
+        crit_name = crit.name if hasattr(crit, "name") else str(crit).upper()
+        sure_values[f"Transformer_{crit_name}"] = avg_sure[crit]
+        fit_values[f"Transformer_{crit_name}"] = avg_fit[crit]
+
+    # 2. Add MMSE baseline (competing estimator)
+    if avg_sure_mmse is not None and avg_fit_mmse is not None:
+        sure_values["MMSE"] = avg_sure_mmse
+        fit_values["MMSE"] = avg_fit_mmse
+
+    # 2. Add LS baseline (NEW)
+    if avg_sure_ls is not None and avg_fit_ls is not None:
+        sure_values["LS"] = avg_sure_ls
+        fit_values["LS"] = avg_fit_ls
+
+    # 3. Sort rankings
+    # SURE: ascending order (lowest risk is best)
+    ranked_by_sure = sorted(sure_values.keys(), key=lambda k: sure_values[k])
+
+    # FIT: descending order (highest precision is best)
+    ranked_by_fit = sorted(fit_values.keys(), key=lambda k: fit_values[k], reverse=True)
+
+    # 4. Print verdict
+    print("\n" + "-" * 90)
+    print(" " * 20 + "SURE RANKING vs TRUE FIT RANKING (Point V)")
+    print("-" * 90)
+    log.info(f"Ranking by SURE (lowest risk best): {ranked_by_sure}")
+    log.info(f"Ranking by TRUE FIT (highest best): {ranked_by_fit}")
+
+    if ranked_by_sure == ranked_by_fit:
+        log.info(
+            "-> VERDICT: SUCCESS! The SURE ranking PERFECTLY AGREES with the true prediction error."
+        )
+    elif ranked_by_sure[0] == ranked_by_fit[0]:
+        log.info(
+            "-> VERDICT: PARTIAL AGREEMENT. SURE correctly identified the BEST estimator, but the remaining order differs."
+        )
+    else:
+        log.info(
+            "-> VERDICT: DISAGREEMENT. The SURE ranking does NOT match the true prediction error."
+        )
+    print("-" * 90 + "\n")

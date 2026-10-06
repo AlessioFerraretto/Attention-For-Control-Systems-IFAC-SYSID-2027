@@ -37,8 +37,10 @@ from utils.Environment import get_job_id, get_torch_device
 from utils.Estimators import (
     compute_hutchinson_df_and_sure,
     compute_ls,
+    compute_ls_df_and_sure,
     compute_mmse,
     compute_mmse_df_and_sure,
+    verify_sure_ranking,
 )
 from utils.ModelCriteria import ModelCriteria
 from utils.SeedManager import SeedManager
@@ -433,6 +435,8 @@ def evaluate_test_set(
 
     total_fit_ls = 0.0
     total_fit_mmse = 0.0
+    total_df_ls = 0.0
+    total_sure_ls = 0.0
     total_df_mmse = 0.0
     total_sure_mmse = 0.0
 
@@ -486,10 +490,16 @@ def evaluate_test_set(
                 u_batch, y_batch, targets, noise_var_batch, kernel_matrix_batch
             )
 
-            # --- COMPUTE EXACT DF AND SURE FOR MMSE BASELINE ---
+            # --- COMPUTE EXACT DF AND SURE FOR MMSE AND LS BASELINE ---
             df_mmse_batch, sure_mmse_batch = compute_mmse_df_and_sure(
                 u_batch, y_batch, noise_var_batch, kernel_matrix_batch, g_length
             )
+            df_ls_batch, sure_ls_batch = compute_ls_df_and_sure(
+                u_batch, y_batch, noise_var_batch, ls_estimate, best_order
+            )
+
+            total_df_ls += df_ls_batch.sum().item()
+            total_sure_ls += sure_ls_batch.sum().item()
 
             total_fit_ls += fit_ls_batch.sum().item()
             total_fit_mmse += fit_mmse_batch.sum().item()
@@ -514,6 +524,8 @@ def evaluate_test_set(
     avg_sure = {crit: val / max(total_samples, 1) for crit, val in total_sure.items()}
 
     avg_fit_ls = total_fit_ls / max(total_samples, 1)
+    avg_df_ls = total_df_ls / max(total_samples, 1)
+    avg_sure_ls = total_sure_ls / max(total_samples, 1)
     avg_fit_mmse = total_fit_mmse / max(total_samples, 1)
     avg_df_mmse = total_df_mmse / max(total_samples, 1)
     avg_sure_mmse = total_sure_mmse / max(total_samples, 1)
@@ -529,7 +541,9 @@ def evaluate_test_set(
             f"Model ({crit_name:<4}) - Loss: {avg_loss[crit]:.5f}, FIT: {avg_fit[crit]:>6.3f}%, DF: {avg_df[crit]:>7.2f}, SURE: {avg_sure[crit]:>8.4f}"
         )
 
-    log.info(f"Baseline LS   - FIT: {avg_fit_ls:>6.3f}%")
+    log.info(
+        f"Baseline LS   - FIT: {avg_fit_ls:>6.3f}%, DF: {avg_df_ls:>7.2f}, SURE: {avg_sure_ls:>8.4f}"
+    )
     log.info(
         f"Baseline MMSE - FIT: {avg_fit_mmse:>6.3f}%, DF: {avg_df_mmse:>7.2f}, SURE: {avg_sure_mmse:>8.4f}"
     )
@@ -538,6 +552,8 @@ def evaluate_test_set(
     # Wandb Logging
     wandb_dict = {
         "test/ls_fit": avg_fit_ls,
+        "test/ls_df": avg_df_ls,
+        "test/ls_sure": avg_sure_ls,
         "test/mmse_fit": avg_fit_mmse,
         "test/mmse_df": avg_df_mmse,
         "test/mmse_sure": avg_sure_mmse,
@@ -557,55 +573,10 @@ def evaluate_test_set(
         avg_fit=avg_fit,
         avg_fit_mmse=avg_fit_mmse,
         avg_sure_mmse=avg_sure_mmse,
+        avg_fit_ls=avg_fit_ls,
+        avg_sure_ls=avg_sure_ls,
     )
     results_manager.save()
-
-
-def verify_sure_ranking(
-    models, avg_sure, avg_fit, avg_fit_mmse=None, avg_sure_mmse=None
-):
-    # --- VERIFY SURE RANKING VS TRUE FIT RANKING ---
-    sure_values = {}
-    fit_values = {}
-
-    # 1. Add Transformer models
-    for crit in models:
-        crit_name = crit.name if hasattr(crit, "name") else str(crit).upper()
-        sure_values[f"Transformer_{crit_name}"] = avg_sure[crit]
-        fit_values[f"Transformer_{crit_name}"] = avg_fit[crit]
-
-    # 2. Add MMSE baseline (competing estimator)
-    if avg_sure_mmse is not None and avg_fit_mmse is not None:
-        sure_values["MMSE"] = avg_sure_mmse
-        fit_values["MMSE"] = avg_fit_mmse
-
-    # 3. Sort rankings
-    # SURE: ascending order (lowest risk is best)
-    ranked_by_sure = sorted(sure_values.keys(), key=lambda k: sure_values[k])
-
-    # FIT: descending order (highest precision is best)
-    ranked_by_fit = sorted(fit_values.keys(), key=lambda k: fit_values[k], reverse=True)
-
-    # 4. Print verdict
-    print("\n" + "-" * 90)
-    print(" " * 20 + "SURE RANKING vs TRUE FIT RANKING (Point V)")
-    print("-" * 90)
-    log.info(f"Ranking by SURE (lowest risk best): {ranked_by_sure}")
-    log.info(f"Ranking by TRUE FIT (highest best): {ranked_by_fit}")
-
-    if ranked_by_sure == ranked_by_fit:
-        log.info(
-            "-> VERDICT: SUCCESS! The SURE ranking PERFECTLY AGREES with the true prediction error."
-        )
-    elif ranked_by_sure[0] == ranked_by_fit[0]:
-        log.info(
-            "-> VERDICT: PARTIAL AGREEMENT. SURE correctly identified the BEST estimator, but the remaining order differs."
-        )
-    else:
-        log.info(
-            "-> VERDICT: DISAGREEMENT. The SURE ranking does NOT match the true prediction error."
-        )
-    print("-" * 90 + "\n")
 
 
 def load_best_models(
