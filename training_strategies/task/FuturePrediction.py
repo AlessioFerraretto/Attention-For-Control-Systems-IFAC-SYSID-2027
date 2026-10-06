@@ -32,7 +32,7 @@ class FuturePrediction:
         norm_diff = torch.linalg.vector_norm(targets - predictions, dim=-1)
         norm_true = torch.linalg.vector_norm(targets, dim=-1)
 
-        # Add an epsilon (1e-8) to the denominator to avoid division by zero
+        # Add an epsilon to the denominator to avoid division by zero
         fit_per_sample = 100.0 * (1.0 - (norm_diff / (norm_true + 1e-8)))
 
         # Compute the mean FIT across the batch

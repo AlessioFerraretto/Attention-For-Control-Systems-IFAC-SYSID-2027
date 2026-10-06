@@ -71,14 +71,13 @@ def evaluate_model_kernel_prediction(
             target_np = targets.cpu().numpy().reshape(-1)
             preds_np = preds.cpu().numpy().reshape(-1)
 
-            # Extract u and y from the inputs (assuming format [100, 2])
-            # We slice up to 'n' to drop any padding tokens
-            if inputs_np.ndim == 2 and inputs_np.shape[1] >= 2:
-                u_data = inputs_np[:n, 0]
-                y_data = inputs_np[:n, 1]
+            # Extract u and y safely from the info dictionary
+            # (since inputs for this task is the impulse response 'g', not u and y)
+            if "u" in info and "y" in info:
+                u_data = info["u"].cpu().numpy()[:n]
+                y_data = info["y"].cpu().numpy()[:n]
             else:
-                # Fallback for 1D concatenated inputs
-                u_data = inputs_np[:n]
+                u_data = np.zeros(n)
                 y_data = np.zeros(n)
 
             # --- Plotting Axes Setup ---

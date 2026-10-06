@@ -45,7 +45,7 @@ model:
 
 dataset:
   name: fixed-future-prediction-v2
-  description: stable spline kernel generator of the type [u, padding]
+  description: stable spline kernel generator of the type [u, padding] -> [y]
 
   shuffle: False # The sequences are already generated randomly
 

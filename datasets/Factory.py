@@ -148,8 +148,13 @@ def get_data_loaders(cfg) -> tuple[DataLoader, DataLoader, DataLoader]:
             c_min=cfg.dataset.c_min,
             c_max=cfg.dataset.c_max,
         )
-        test_dataset = ImpulseResponsePrediction(
-            cfg=cfg, batch_size=cfg.test_batch_size, alpha=fixed_alpha, c=fixed_c
+        test_dataset = DynamicImpulseResponsePrediction(
+            cfg=cfg,
+            batch_size=cfg.test_batch_size,
+            alpha_min=cfg.dataset.alpha_min,
+            alpha_max=cfg.dataset.alpha_max,
+            c_min=cfg.dataset.c_min,
+            c_max=cfg.dataset.c_max,
         )
     elif cfg.dataset.name == "kernel-parameters-prediction":
         train_dataset = KernelParametersPrediction(

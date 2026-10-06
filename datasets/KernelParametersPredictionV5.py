@@ -28,6 +28,8 @@ class KernelParametersPredictionV5(Dataset):
         self.c_max = cfg.dataset.c_max
         self.alpha_min = cfg.dataset.alpha_min
         self.alpha_max = cfg.dataset.alpha_max
+        self.eta_min = cfg.dataset.eta_min
+        self.eta_max = cfg.dataset.eta_max
         self.snr_min = cfg.dataset.snr_min
         self.snr_max = cfg.dataset.snr_max
         self.jitter_regularization_parameter = (
@@ -49,6 +51,9 @@ class KernelParametersPredictionV5(Dataset):
         c = (self.c_max - self.c_min) * SeedManager().dataset_rand(
             1
         ).item() + self.c_min
+        eta = (self.eta_max - self.eta_min) * SeedManager().dataset_rand(
+            1
+        ).item() + self.eta_min
 
         sample = generate_stable_spline(
             self.g_length,
@@ -56,6 +61,7 @@ class KernelParametersPredictionV5(Dataset):
             self.n_future,
             c,
             alpha,
+            eta,
             self.snr_min,
             self.snr_max,
             self.jitter_regularization_parameter,

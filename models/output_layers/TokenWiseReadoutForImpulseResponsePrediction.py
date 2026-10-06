@@ -76,6 +76,6 @@ class TokenWiseReadoutForImpulseResponse(TrackableModule):
 
         # 3. Remove the last dummy dimension to obtain scalar logits
         # Shape: (batch, g_length)
-        predictions = output.squeeze(-1)
+        predictions = output.squeeze(-1) if self.output_dim == 1 else output
 
         return predictions, predictions

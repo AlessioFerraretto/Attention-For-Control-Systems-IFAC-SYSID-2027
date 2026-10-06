@@ -120,7 +120,7 @@ class CheckpointManager:
             path.unlink()
 
         model_path = (
-            self.base_dir / f"best_model_{criteria}_{loss:.3f}_{accuracy:.3f}.pt"
+            self.base_dir / f"best_model_{criteria.value}_{loss:.3f}_{accuracy:.3f}.pt"
         )
         torch.save(
             obj={
@@ -150,13 +150,11 @@ class CheckpointManager:
         Raises:
           FileNotFoundError: Raised when no best-model checkpoint exists for the requested criterion.
         """
-        # USE criteria.value TO EXTRACT "acc" OR "loss" FROM THE ENUM
-        criteria_str = criteria.value
 
-        files = list(self.base_dir.glob(f"best_model_{criteria_str}*.pt"))
+        files = list(self.base_dir.glob(f"best_model_{criteria.value}*.pt"))
         if not files:
-            log.error(f"Best {criteria_str} model not found in {self.base_dir}")
-            raise FileNotFoundError(f"Best model for {criteria_str} not found.")
+            log.error(f"Best {criteria.value} model not found in {self.base_dir}")
+            raise FileNotFoundError(f"Best model for {criteria.value} not found.")
 
         log.info(f"Loaded: {files[0]}")
         checkpoint = torch.load(f=files[0], weights_only=False)

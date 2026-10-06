@@ -144,7 +144,6 @@ def compute_hutchinson_df_and_sure(
     Computes the effective Degrees of Freedom (df) and SURE estimate using Hutchinson's stochastic trace method.
     """
     B, n = y.shape
-    device = y.device
 
     # 1. Prepare y for gradient computation
     y_with_grad = y.clone().requires_grad_(True)
@@ -165,10 +164,10 @@ def compute_hutchinson_df_and_sure(
     y_hat = torch.bmm(U, g_hat.unsqueeze(-1)).squeeze(-1)  # Shape: (B, n)
 
     # 5. Hutchinson's method to estimate df = tr(dy_hat / dy)
-    df_estimate = torch.zeros(B, device=device)
+    df_estimate = torch.zeros(B, device=y.device)
     for _ in range(M):
         # Rademacher vector (equiprobable -1 or +1 values)
-        z = (torch.randint(0, 2, size=y_hat.shape, device=device).float() * 2) - 1.0
+        z = (torch.randint(0, 2, size=y_hat.shape, device=y.device).float() * 2) - 1.0
 
         # Vector-Jacobian Product (VJP) via autograd
         vjp = torch.autograd.grad(
@@ -196,7 +195,6 @@ def compute_mmse_df_and_sure(u, y, noise_var, K, g_length):
     Computes the exact Degrees of Freedom (df) and SURE estimate for the Bayesian MMSE estimator.
     """
     B, n = y.shape
-    device = y.device
 
     # 1. Build the Toeplitz matrix U for the batch
     u_padded = torch.nn.functional.pad(u, (g_length - 1, 0))
@@ -209,7 +207,7 @@ def compute_mmse_df_and_sure(u, y, noise_var, K, g_length):
     UKUT = torch.bmm(UK, U_T)  # Shape: (B, n, n)
 
     # 3. Add the noise variance to the diagonal (sigma^2 I)
-    I = torch.eye(n, device=device).unsqueeze(0).expand(B, n, n)
+    I = torch.eye(n, device=y.device).unsqueeze(0).expand(B, n, n)
     sigma2_I = noise_var.view(B, 1, 1) * I
 
     # 4. Solve the system to obtain the projection matrix H = U K U' (U K U' + sigma^2 I)^(-1)
@@ -259,6 +257,110 @@ def compute_ls_df_and_sure(u, y, noise_var, ls_estimate, best_order):
     return df_estimate.detach(), sure_estimate.detach()
 
 
+def compute_impulseest(
+    input_batch: torch.Tensor,
+    output_batch: torch.Tensor,
+    true_impulse_batch: torch.Tensor,
+    noise_var_batch: torch.Tensor,
+    matrix_kernel_batch: torch.Tensor,
+):
+    """
+    Estimates the impulse response using the TC (Tuned and Correlated) kernel.
+    This is mathematically equivalent to the MMSE estimator but solved via
+    the regularized normal equations (Primal space) instead of the Dual space.
+    """
+    B, n = input_batch.shape
+    g_length = matrix_kernel_batch.shape[-1]
+    device = input_batch.device
+    dtype = input_batch.dtype
+
+    # 1. Build the Toeplitz matrix U
+    u_padded = torch.nn.functional.pad(input_batch, (g_length - 1, 0))
+    U = u_padded.unfold(dimension=1, size=g_length, step=1)
+    U = torch.flip(U, dims=[2])  # Shape: (B, n, g_length)
+    U_T = U.transpose(1, 2)  # Shape: (B, g_length, n)
+
+    # 2. Compute U^T * U
+    UT_U = torch.bmm(U_T, U)  # Shape: (B, g_length, g_length)
+
+    # 3. Formulate the TC Kernel regularized system: (K * U^T * U + sigma^2 * I) g = K * U^T * y
+    # We multiply by K to avoid computing K^-1, which is numerically unstable.
+    K_UT_U = torch.bmm(matrix_kernel_batch, UT_U)
+
+    I = torch.eye(g_length, dtype=dtype, device=device).unsqueeze(0).expand(B, -1, -1)
+    sigma2_I = noise_var_batch.view(B, 1, 1) * I
+
+    # Left hand side of the equation (A)
+    LHS = K_UT_U + sigma2_I
+
+    # Right hand side of the equation (b)
+    UT_y = torch.bmm(U_T, output_batch.unsqueeze(-1))
+    RHS = torch.bmm(matrix_kernel_batch, UT_y)
+
+    # 4. Solve the linear system
+    g_hat = torch.linalg.solve(LHS, RHS).squeeze(-1)
+
+    # 5. Calculate FIT
+    norm_difference = torch.linalg.vector_norm(true_impulse_batch - g_hat, dim=-1)
+    norm_true_response = torch.linalg.vector_norm(true_impulse_batch, dim=-1)
+    fit_metric = 100.0 * (1.0 - (norm_difference / (norm_true_response + 1e-8)))
+
+    return g_hat, fit_metric
+
+
+def compute_impulseest_df_and_sure(
+    u: torch.Tensor,
+    y: torch.Tensor,
+    noise_var_batch: torch.Tensor,
+    matrix_kernel_batch: torch.Tensor,
+    g_length: int,
+):
+    """
+    Computes the Degrees of Freedom (df) and SURE estimate for the TC kernel estimator.
+    It uses the primal space formulation to match compute_impulseest_tc.
+    """
+    B, n = y.shape
+    device = y.device
+    dtype = y.dtype
+
+    # 1. Build the Toeplitz matrix U
+    u_padded = torch.nn.functional.pad(u, (g_length - 1, 0))
+    U = u_padded.unfold(dimension=1, size=g_length, step=1)
+    U = torch.flip(U, dims=[2])
+    U_T = U.transpose(1, 2)
+
+    # 2. Build K * U^T * U
+    UT_U = torch.bmm(U_T, U)
+    K_UT_U = torch.bmm(matrix_kernel_batch, UT_U)
+
+    # 3. Add noise variance: K * U^T * U + sigma^2 * I
+    I = torch.eye(g_length, dtype=dtype, device=device).unsqueeze(0).expand(B, -1, -1)
+    sigma2_I = noise_var_batch.view(B, 1, 1) * I
+    LHS = K_UT_U + sigma2_I
+
+    # 4. Compute projection matrix H = U * (K * U^T * U + sigma^2 * I)^(-1) * K * U^T
+    # First, solve LHS * X = K * U^T  --> X will be (K * U^T * U + sigma^2 * I)^(-1) * K * U^T
+    K_UT = torch.bmm(matrix_kernel_batch, U_T)
+    X = torch.linalg.solve(LHS, K_UT)
+
+    H = torch.bmm(U, X)  # Shape: (B, n, n)
+
+    # 5. The exact degrees of freedom are the trace of the projection matrix H
+    df_estimate = torch.diagonal(H, dim1=-2, dim2=-1).sum(-1)
+
+    # 6. Compute y_hat = H * y and SURE
+    y_hat = torch.bmm(H, y.unsqueeze(-1)).squeeze(-1)
+    residuals_sq = torch.sum((y - y_hat) ** 2, dim=1)
+
+    sure_estimate = (
+        residuals_sq
+        + 2 * noise_var_batch.squeeze() * df_estimate
+        - n * noise_var_batch.squeeze()
+    )
+
+    return df_estimate.detach(), sure_estimate.detach()
+
+
 def verify_sure_ranking(
     models,
     avg_sure,
@@ -267,6 +369,8 @@ def verify_sure_ranking(
     avg_sure_mmse,
     avg_fit_ls,
     avg_sure_ls,
+    avg_fit_impulseest,
+    avg_sure_impulseest,
 ):
     # --- VERIFY SURE RANKING VS TRUE FIT RANKING ---
     sure_values = {}
@@ -283,10 +387,15 @@ def verify_sure_ranking(
         sure_values["MMSE"] = avg_sure_mmse
         fit_values["MMSE"] = avg_fit_mmse
 
-    # 2. Add LS baseline (NEW)
+    # 2. Add LS baseline
     if avg_sure_ls is not None and avg_fit_ls is not None:
         sure_values["LS"] = avg_sure_ls
         fit_values["LS"] = avg_fit_ls
+
+    # 2. Add Impulseest baseline
+    if avg_sure_impulseest is not None and avg_fit_impulseest is not None:
+        sure_values["Impulseest"] = avg_sure_impulseest
+        fit_values["Impulseest"] = avg_fit_impulseest
 
     # 3. Sort rankings
     # SURE: ascending order (lowest risk is best)
@@ -295,23 +404,9 @@ def verify_sure_ranking(
     # FIT: descending order (highest precision is best)
     ranked_by_fit = sorted(fit_values.keys(), key=lambda k: fit_values[k], reverse=True)
 
-    # 4. Print verdict
     print("\n" + "-" * 90)
-    print(" " * 20 + "SURE RANKING vs TRUE FIT RANKING (Point V)")
+    print(" " * 20 + "SURE RANKING vs TRUE FIT RANKING")
     print("-" * 90)
     log.info(f"Ranking by SURE (lowest risk best): {ranked_by_sure}")
     log.info(f"Ranking by TRUE FIT (highest best): {ranked_by_fit}")
-
-    if ranked_by_sure == ranked_by_fit:
-        log.info(
-            "-> VERDICT: SUCCESS! The SURE ranking PERFECTLY AGREES with the true prediction error."
-        )
-    elif ranked_by_sure[0] == ranked_by_fit[0]:
-        log.info(
-            "-> VERDICT: PARTIAL AGREEMENT. SURE correctly identified the BEST estimator, but the remaining order differs."
-        )
-    else:
-        log.info(
-            "-> VERDICT: DISAGREEMENT. The SURE ranking does NOT match the true prediction error."
-        )
     print("-" * 90 + "\n")

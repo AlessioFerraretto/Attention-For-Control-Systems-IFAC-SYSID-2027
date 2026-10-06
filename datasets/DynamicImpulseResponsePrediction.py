@@ -26,6 +26,8 @@ class DynamicImpulseResponsePrediction(Dataset):
         self.c_max = c_max
         self.alpha_min = alpha_min
         self.alpha_max = alpha_max
+        self.eta_min = cfg.dataset.eta_min
+        self.eta_max = cfg.dataset.eta_max
         self.snr_min = cfg.dataset.snr_min
         self.snr_max = cfg.dataset.snr_max
         self.jitter_regularization_parameter = (
@@ -41,15 +43,15 @@ class DynamicImpulseResponsePrediction(Dataset):
         return self.batches_per_epoch * self.batch_size
 
     def __getitem__(self, idx):
-
-        c = (
-            SeedManager().dataset_rand(1).item() * (self.c_max - self.c_min)
-            + self.c_min
-        )
-
         alpha = (self.alpha_max - self.alpha_min) * SeedManager().dataset_rand(
             1
         ).item() + self.alpha_min
+        c = (self.c_max - self.c_min) * SeedManager().dataset_rand(
+            1
+        ).item() + self.c_min
+        eta = (self.eta_max - self.eta_min) * SeedManager().dataset_rand(
+            1
+        ).item() + self.eta_min
 
         # Generate (g) and the resulting (u, y) using the fixed system (c, alpha)
         sample = generate_stable_spline(
@@ -58,6 +60,7 @@ class DynamicImpulseResponsePrediction(Dataset):
             self.n_future,
             c,
             alpha,
+            eta,
             self.snr_min,
             self.snr_max,
             self.jitter_regularization_parameter,

@@ -36,6 +36,8 @@ from utils.CheckpointManager import CheckpointManager
 from utils.Environment import get_job_id, get_torch_device
 from utils.Estimators import (
     compute_hutchinson_df_and_sure,
+    compute_impulseest,
+    compute_impulseest_df_and_sure,
     compute_ls,
     compute_ls_df_and_sure,
     compute_mmse,
@@ -317,16 +319,18 @@ def training(
         if cfg.save_checkpoints:
             ckpt_manager.save_checkpoint(epoch, model, opt, val_loss, fit)
 
+        log.info("SAVE THINGS")
+
         # Save best model in terms of accuracy
         if fit > best_fit:
+            log.info("SAVE THINGS 111111111")
             best_fit = fit
-            # CHANGE "acc" to ModelCriteria.ACC
             ckpt_manager.save_best(model, ModelCriteria.ACC, opt, val_loss, fit)
 
         # Save best model in terms of loss
         if val_loss < best_val_loss:
+            log.info("SAVE THINGS 222222222")
             best_val_loss = val_loss
-            # CHANGE "loss" to ModelCriteria.LOSS
             ckpt_manager.save_best(model, ModelCriteria.LOSS, opt, val_loss, fit)
 
     log.info("Training complete.")
@@ -412,13 +416,13 @@ def evaluate_test_set(
 ):
     """
     Evaluates all provided models (passed as a dict mapping criteria to model)
-    and the LS/MMSE baselines in a single, unified loop over the test dataset.
+    and the LS/MMSE/Impulseest baselines in a single, unified loop over the test dataset.
     Also computes Stein's Unbiased Risk Estimate (SURE) and effective degrees of freedom.
     """
     log.info("Starting unified test set evaluation (Models + Baselines + SURE)...")
     results_manager = TestResultsManager(base_dir)
 
-    # Set up the strategy using the first available model (strategy is stateless enough for evaluation)
+    # Set up the strategy using the first available model
     strategy = make_strategy(cfg)
     first_model = next(iter(models.values()))
     strategy.setup_for_eval(first_model)
@@ -428,17 +432,15 @@ def evaluate_test_set(
         model.eval()
 
     total_samples = 0
-    total_loss = {crit: 0.0 for crit in models}
-    total_fit = {crit: 0.0 for crit in models}
-    total_df = {crit: 0.0 for crit in models}
-    total_sure = {crit: 0.0 for crit in models}
 
-    total_fit_ls = 0.0
-    total_fit_mmse = 0.0
-    total_df_ls = 0.0
-    total_sure_ls = 0.0
-    total_df_mmse = 0.0
-    total_sure_mmse = 0.0
+    # Group all estimators (models + baselines)
+    estimators = list(models.keys()) + ["ls", "mmse", "impulseest"]
+    totals = {
+        "loss": {crit: 0.0 for crit in models},
+        "fit": {k: 0.0 for k in estimators},
+        "df": {k: 0.0 for k in estimators},
+        "sure": {k: 0.0 for k in estimators},
+    }
 
     with torch.no_grad():
         for inputs, targets, info, *rest in test_loader:
@@ -452,22 +454,22 @@ def evaluate_test_set(
             u_batch = info["u"].to(device)
             y_batch = info["y"].to(device)
             noise_var_batch = info["noise_variance"].to(device)
-            kernel_matrix_batch = info["kernel_matrix"].to(device)
+            matrix_kernel_batch = info["kernel_matrix"].to(device)
             g_length = test_loader.dataset.g_length
 
-            # 1. Model Predictions & Metrics
+            # --- MODEL PREDICTIONS & METRICS ---
             preds_dict = {}
             for crit, model in models.items():
                 preds, _ = model(inputs, masks)
                 preds_dict[crit] = preds
 
                 loss = loss_fn(preds, targets).item() * batch_size
-                total_loss[crit] += loss
+                totals["loss"][crit] += loss
 
                 metrics = strategy.compute_metrics(preds, targets)
-                total_fit[crit] += metrics["fit"] * batch_size
+                totals["fit"][crit] += metrics["fit"] * batch_size
 
-                # --- COMPUTE DF AND SURE (Temporarily re-enable gradients) ---
+                # Compute DF and SURE (Temporarily re-enable gradients)
                 with torch.enable_grad():
                     df_batch, sure_batch = compute_hutchinson_df_and_sure(
                         model,
@@ -479,58 +481,67 @@ def evaluate_test_set(
                         g_length,
                         M=5,
                     )
-                total_df[crit] += df_batch.sum().item()
-                total_sure[crit] += sure_batch.sum().item()
+                totals["df"][crit] += df_batch.sum().item()
+                totals["sure"][crit] += sure_batch.sum().item()
 
-            # 2. Baselines (LS & MMSE)
+            # --- BASELINES PREDICTIONS ---
             ls_estimate, fit_ls_batch, best_order = compute_ls(
                 u_batch, y_batch, targets, g_length
             )
             mmse_estimate, fit_mmse_batch = compute_mmse(
-                u_batch, y_batch, targets, noise_var_batch, kernel_matrix_batch
+                u_batch, y_batch, targets, noise_var_batch, matrix_kernel_batch
+            )
+            impulseest_estimate, fit_impulseest_batch = compute_impulseest(
+                u_batch, y_batch, targets, noise_var_batch, matrix_kernel_batch
             )
 
-            # --- COMPUTE EXACT DF AND SURE FOR MMSE AND LS BASELINE ---
-            df_mmse_batch, sure_mmse_batch = compute_mmse_df_and_sure(
-                u_batch, y_batch, noise_var_batch, kernel_matrix_batch, g_length
-            )
+            # --- BASELINES DF & SURE ---
             df_ls_batch, sure_ls_batch = compute_ls_df_and_sure(
                 u_batch, y_batch, noise_var_batch, ls_estimate, best_order
             )
+            df_mmse_batch, sure_mmse_batch = compute_mmse_df_and_sure(
+                u_batch, y_batch, noise_var_batch, matrix_kernel_batch, g_length
+            )
+            df_impulseest_batch, sure_impulseest_batch = compute_impulseest_df_and_sure(
+                u_batch,
+                y_batch,
+                noise_var_batch,
+                matrix_kernel_batch,
+                g_length,
+            )
 
-            total_df_ls += df_ls_batch.sum().item()
-            total_sure_ls += sure_ls_batch.sum().item()
+            # Accumulate Baseline Metrics
+            totals["fit"]["ls"] += fit_ls_batch.sum().item()
+            totals["df"]["ls"] += df_ls_batch.sum().item()
+            totals["sure"]["ls"] += sure_ls_batch.sum().item()
 
-            total_fit_ls += fit_ls_batch.sum().item()
-            total_fit_mmse += fit_mmse_batch.sum().item()
-            total_df_mmse += df_mmse_batch.sum().item()
-            total_sure_mmse += sure_mmse_batch.sum().item()
+            totals["fit"]["mmse"] += fit_mmse_batch.sum().item()
+            totals["df"]["mmse"] += df_mmse_batch.sum().item()
+            totals["sure"]["mmse"] += sure_mmse_batch.sum().item()
 
-            # 3. Store Results
+            totals["fit"]["impulseest"] += fit_impulseest_batch.sum().item()
+            totals["df"]["impulseest"] += df_impulseest_batch.sum().item()
+            totals["sure"]["impulseest"] += sure_impulseest_batch.sum().item()
+
+            # --- STORE RESULTS ---
             results_manager.update(
                 true_impulse_response=targets,
                 ls_estimate=ls_estimate,
                 mmse_estimate=mmse_estimate,
+                impulseest_estimate=impulseest_estimate,
                 model_best_accuracy_estimate=preds_dict.get(ModelCriteria.ACC),
                 model_best_loss_estimate=preds_dict.get(ModelCriteria.LOSS),
                 model_inference_estimate=preds_dict.get(ModelCriteria.INF),
                 best_order=best_order,
             )
 
-    # Averages
-    avg_loss = {crit: val / max(total_samples, 1) for crit, val in total_loss.items()}
-    avg_fit = {crit: val / max(total_samples, 1) for crit, val in total_fit.items()}
-    avg_df = {crit: val / max(total_samples, 1) for crit, val in total_df.items()}
-    avg_sure = {crit: val / max(total_samples, 1) for crit, val in total_sure.items()}
+    # COMPUTE AVERAGES
+    avgs = {
+        metric_name: {k: val / max(total_samples, 1) for k, val in metric_dict.items()}
+        for metric_name, metric_dict in totals.items()
+    }
 
-    avg_fit_ls = total_fit_ls / max(total_samples, 1)
-    avg_df_ls = total_df_ls / max(total_samples, 1)
-    avg_sure_ls = total_sure_ls / max(total_samples, 1)
-    avg_fit_mmse = total_fit_mmse / max(total_samples, 1)
-    avg_df_mmse = total_df_mmse / max(total_samples, 1)
-    avg_sure_mmse = total_sure_mmse / max(total_samples, 1)
-
-    # Logging
+    # LOGGING
     print("\n" + "=" * 90)
     print(" " * 30 + "TEST SET EVALUATION SUMMARY")
     print("=" * 90)
@@ -538,44 +549,53 @@ def evaluate_test_set(
     for crit in models:
         crit_name = crit.name if hasattr(crit, "name") else str(crit).upper()
         log.info(
-            f"Model ({crit_name:<4}) - Loss: {avg_loss[crit]:.5f}, FIT: {avg_fit[crit]:>6.3f}%, DF: {avg_df[crit]:>7.2f}, SURE: {avg_sure[crit]:>8.4f}"
+            f"Model ({crit_name:<4}) - Loss: {avgs['loss'][crit]:.5f}, "
+            f"FIT: {avgs['fit'][crit]:>6.3f}%, DF: {avgs['df'][crit]:>7.2f}, SURE: {avgs['sure'][crit]:>8.4f}"
         )
 
-    log.info(
-        f"Baseline LS   - FIT: {avg_fit_ls:>6.3f}%, DF: {avg_df_ls:>7.2f}, SURE: {avg_sure_ls:>8.4f}"
-    )
-    log.info(
-        f"Baseline MMSE - FIT: {avg_fit_mmse:>6.3f}%, DF: {avg_df_mmse:>7.2f}, SURE: {avg_sure_mmse:>8.4f}"
-    )
+    for baseline, name in [
+        ("impulseest", "Impulseest"),
+        ("ls", "LS"),
+        ("mmse", "MMSE"),
+    ]:
+        log.info(
+            f"Baseline {name:<10} - FIT: {avgs['fit'][baseline]:>6.3f}%, "
+            f"DF: {avgs['df'][baseline]:>7.2f}, SURE: {avgs['sure'][baseline]:>8.4f}"
+        )
     print("=" * 90 + "\n")
 
-    # Wandb Logging
-    wandb_dict = {
-        "test/ls_fit": avg_fit_ls,
-        "test/ls_df": avg_df_ls,
-        "test/ls_sure": avg_sure_ls,
-        "test/mmse_fit": avg_fit_mmse,
-        "test/mmse_df": avg_df_mmse,
-        "test/mmse_sure": avg_sure_mmse,
-    }
+    # WANDB LOGGING
+    wandb_dict = {}
+
+    # Log Baselines
+    for baseline in ["ls", "mmse", "impulseest"]:
+        wandb_dict[f"test/{baseline}_fit"] = avgs["fit"][baseline]
+        wandb_dict[f"test/{baseline}_df"] = avgs["df"][baseline]
+        wandb_dict[f"test/{baseline}_sure"] = avgs["sure"][baseline]
+
+    # Log Models
     for crit in models:
         crit_val = crit.value if hasattr(crit, "value") else str(crit).lower()
-        wandb_dict[f"test/model_{crit_val}_loss"] = avg_loss[crit]
-        wandb_dict[f"test/model_{crit_val}_fit"] = avg_fit[crit]
-        wandb_dict[f"test/model_{crit_val}_df"] = avg_df[crit]
-        wandb_dict[f"test/model_{crit_val}_sure"] = avg_sure[crit]
+        wandb_dict[f"test/model_{crit_val}_loss"] = avgs["loss"][crit]
+        wandb_dict[f"test/model_{crit_val}_fit"] = avgs["fit"][crit]
+        wandb_dict[f"test/model_{crit_val}_df"] = avgs["df"][crit]
+        wandb_dict[f"test/model_{crit_val}_sure"] = avgs["sure"][crit]
 
     wandb_logger.log(wandb_dict)
 
+    # RANKING VERIFICATION
     verify_sure_ranking(
         models=models,
-        avg_sure=avg_sure,
-        avg_fit=avg_fit,
-        avg_fit_mmse=avg_fit_mmse,
-        avg_sure_mmse=avg_sure_mmse,
-        avg_fit_ls=avg_fit_ls,
-        avg_sure_ls=avg_sure_ls,
+        avg_sure=avgs["sure"],
+        avg_fit=avgs["fit"],
+        avg_fit_mmse=avgs["fit"]["mmse"],
+        avg_sure_mmse=avgs["sure"]["mmse"],
+        avg_fit_ls=avgs["fit"]["ls"],
+        avg_sure_ls=avgs["sure"]["ls"],
+        avg_fit_impulseest=avgs["fit"]["impulseest"],
+        avg_sure_impulseest=avgs["sure"]["impulseest"],
     )
+
     results_manager.save()
 
 

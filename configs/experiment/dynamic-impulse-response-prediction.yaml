@@ -31,7 +31,7 @@ model:
   activation_function: gelu
   dropout: 0.1
 
-  # Only for out_layer = mlp-classifier
+  # Only for out_layer = mlp-classifier or out_layer = token-wise-readout-for-impulse-response-prediction
   input_dim_classifier: "${model.output_dim}" # Input dimension of the classifier = output_dim
   hidden_dim_classifier: "${model.output_dim}" # Hidden dimension of the classifier = output_dim
   output_dim_classifier: 1 # Output dimension of the classifier = 1
@@ -39,8 +39,8 @@ model:
   out_bias2_classifier: True # Biases of classifier hidden layer and out layer
 
   # Only for out_layer = mean-pooled-classifier
-  head_bias: True # Biases of the head layer
-  eps: 1e-6 # Epsilon for numerical stability in the head layer
+  # head_bias: True # Biases of the head layer
+  # eps: 1e-6 # Epsilon for numerical stability in the head layer
 
   out_dir_name: "transformer"
 
@@ -49,7 +49,7 @@ dataset:
   description: stable spline kernel generator of the type [ [u, y], padding] -> [g]
 
   shuffle: False # The sequences are already generated randomly
-  kernel: "gaussian"
+  kernel: "stable_spline" # "stable_spline" or "gaussian"
 
   batches_per_epoch: 1000
 
@@ -59,14 +59,17 @@ dataset:
   n_future: "${dataset.n}"
   c_min: 0.0001
   c_max: 1.0
-  alpha_min: 0.70
-  alpha_max: 0.95
+  alpha_min: 0.70 # Only for kernel = "stable_spline"
+  alpha_max: 0.95 # Only for kernel = "stable_spline"
+  eta_min: 0.1 # Only for kernel = "gaussian"
+  eta_max: 0.9 # Only for kernel = "gaussian"
+
   snr_min: 3
   snr_max: 10
   jitter_regularization_parameter: 0.00001
 
   padding: 0
-  filter_type: "type_1"
+  filter_type: "type_1" # "white": white noise or "type_1": 1 / (z - a) or "type_2": (1 - a) (z - a)
   a_param: 0.9
 
   out_dir_name: "dynamic-impulse-response-prediction"

@@ -20,7 +20,7 @@ def generate_stable_spline_kernel(impulse_length, c, alpha):
 
 
 def sample_stable_spline_impulse_response(
-    g_length, c, alpha, jitter_regularization_parameter
+    g_length, c, alpha, eta, jitter_regularization_parameter
 ):
     """Sample the stable spline hyperparameters and impulse response 'g'.
 
@@ -46,10 +46,9 @@ def generate_gaussian_kernel(impulse_length, c, eta):
 
 
 def sample_gaussian_impulse_response(
-    g_length, c, alpha, jitter_regularization_parameter
+    g_length, c, alpha, eta, jitter_regularization_parameter
 ):
     """Sample the Gaussian kernel hyperparameters and impulse response 'g'."""
-    eta = alpha  # For Gaussian kernel, we can use 'alpha' as 'eta'
     K_eta = generate_gaussian_kernel(g_length, c, eta)
     jitter = torch.eye(g_length) * jitter_regularization_parameter
 
@@ -138,6 +137,7 @@ def generate_stable_spline(
     n_future,
     c,
     alpha,
+    eta,
     snr_min,
     snr_max,
     jitter_regularization_parameter,
@@ -153,7 +153,11 @@ def generate_stable_spline(
 
     # 1. Sample the system physics
     g, system_params = KERNELS.get(kernel)(
-        g_length, c, alpha, jitter_regularization_parameter
+        g_length,
+        c,
+        alpha=alpha,
+        eta=eta,
+        jitter_regularization_parameter=jitter_regularization_parameter,
     )
 
     # 2. Simulate a single trajectory of length n
@@ -165,15 +169,13 @@ def generate_stable_spline(
     u_future = u[n_past:]
     y_future = y[n_past:]
 
+    eta_dict = {**system_params, "snr": snr}
+
     return {
         "u_past": u_past,
         "y_past": y_past,
         "u_future": u_future,
         "y_future": y_future,
         "g": g,
-        "eta": {
-            "c": system_params["c"],
-            "alpha": system_params["alpha"],
-            "snr": snr,
-        },
+        "eta": eta_dict,
     }
