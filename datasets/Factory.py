@@ -156,7 +156,7 @@ def get_data_loaders(cfg) -> tuple[DataLoader, DataLoader, DataLoader]:
             c_min=cfg.dataset.c_min,
             c_max=cfg.dataset.c_max,
         )
-    elif cfg.dataset.name == "kernel-parameters-prediction":
+    elif cfg.dataset.name == "kernel-parameters-estimation":
         train_dataset = KernelParametersPrediction(
             cfg=cfg,
             batch_size=cfg.training_batch_size,
@@ -169,7 +169,7 @@ def get_data_loaders(cfg) -> tuple[DataLoader, DataLoader, DataLoader]:
             cfg=cfg,
             batch_size=cfg.test_batch_size,
         )
-    elif cfg.dataset.name == "kernel-parameters-prediction-v2":
+    elif cfg.dataset.name == "kernel-parameters-estimation-v2":
         train_dataset = KernelParametersPredictionV2(
             cfg=cfg,
             batch_size=cfg.training_batch_size,
@@ -182,7 +182,7 @@ def get_data_loaders(cfg) -> tuple[DataLoader, DataLoader, DataLoader]:
             cfg=cfg,
             batch_size=cfg.test_batch_size,
         )
-    elif cfg.dataset.name == "kernel-parameters-prediction-v3":
+    elif cfg.dataset.name == "kernel-parameters-estimation-v3":
         train_dataset = KernelParametersPredictionV3(
             cfg=cfg,
             batch_size=cfg.training_batch_size,
@@ -195,7 +195,7 @@ def get_data_loaders(cfg) -> tuple[DataLoader, DataLoader, DataLoader]:
             cfg=cfg,
             batch_size=cfg.test_batch_size,
         )
-    elif cfg.dataset.name == "kernel-parameters-prediction-v4":
+    elif cfg.dataset.name == "kernel-parameters-estimation-v4":
         train_dataset = KernelParametersPredictionV4(
             cfg=cfg,
             batch_size=cfg.training_batch_size,
@@ -208,7 +208,7 @@ def get_data_loaders(cfg) -> tuple[DataLoader, DataLoader, DataLoader]:
             cfg=cfg,
             batch_size=cfg.test_batch_size,
         )
-    elif cfg.dataset.name == "kernel-parameters-prediction-v5":
+    elif cfg.dataset.name == "kernel-parameters-estimation-v5":
         train_dataset = KernelParametersPredictionV5(
             cfg=cfg,
             batch_size=cfg.training_batch_size,

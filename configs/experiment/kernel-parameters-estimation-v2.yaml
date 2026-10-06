@@ -19,7 +19,7 @@ model:
   model_name: transformer # Name of the layer used
   embedding: transformer-positional-encoding # Embedding type
   layer_name: transformer-encoder-layer # Name of the layer used
-  out_layer: mlp-classifier-for-kernel-parameters-prediction-v2 # Output layer type
+  out_layer: mlp-classifier-for-kernel-parameters-estimation-v2 # Output layer type
   num_layers: 4
 
   # Layer parameters
@@ -30,7 +30,7 @@ model:
   activation_function: gelu
   dropout: 0.1
 
-  # Only for out_layer = mlp-classifier
+  # Only for out_layer = "mlp-classifier" or out_layer = "token-wise-readout"
   input_dim_classifier: "${mul: 1, ${model.output_dim} }" # Input dimension of the classifier = output_dim * 1
   hidden_dim_classifier: "${div: ${model.input_dim_classifier}, 2 }" # Hidden dimension of the classifier = input_dim_classifier/2
   output_dim_classifier: 1 # Output dimension of the classifier = 1
@@ -44,7 +44,7 @@ model:
   out_dir_name: "transformer"
 
 dataset:
-  name: kernel-parameters-prediction-v2
+  name: kernel-parameters-estimation-v2
   description: stable spline kernel generator of the type [ [u, y] , padding] -> [alpha * c]
 
   shuffle: False # The sequences are already generated randomly
@@ -67,11 +67,11 @@ dataset:
   low_pass_cutoff: null
   low_pass_cutoff_order: null
 
-  out_dir_name: "kernel-parameters-prediction-v2"
+  out_dir_name: "kernel-parameters-estimation-v2"
 
 wandb:
   enable: True
   project: AttentionForControlSystems
   entity: alessioferraretto-unipd
-  dataset: kernel-parameters-prediction-v2
+  dataset: kernel-parameters-estimation-v2
   model_name: "transformer"

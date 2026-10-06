@@ -1,8 +1,8 @@
 from training_strategies.models.Transformer import Transformer
 from training_strategies.task.FuturePrediction import FuturePrediction
 from training_strategies.task.ImpulseResponsePrediction import ImpulseResponsePrediction
-from training_strategies.task.KernelParametersPrediction import (
-    KernelParametersPrediction,
+from training_strategies.task.KernelParametersEstimation import (
+    KernelParametersEstimation,
 )
 from training_strategies.TrainingStrategy import TrainingStrategy
 
@@ -14,11 +14,11 @@ TASKS = {
     "dynamic-future-prediction-v3": FuturePrediction,
     "impulse-response-prediction": ImpulseResponsePrediction,
     "dynamic-impulse-response-prediction": ImpulseResponsePrediction,
-    "kernel-parameters-prediction": KernelParametersPrediction,
-    "kernel-parameters-prediction-v2": KernelParametersPrediction,
-    "kernel-parameters-prediction-v3": KernelParametersPrediction,
-    "kernel-parameters-prediction-v4": KernelParametersPrediction,
-    "kernel-parameters-prediction-v5": KernelParametersPrediction,
+    "kernel-parameters-estimation": KernelParametersEstimation,
+    "kernel-parameters-estimation-v2": KernelParametersEstimation,
+    "kernel-parameters-estimation-v3": KernelParametersEstimation,
+    "kernel-parameters-estimation-v4": KernelParametersEstimation,
+    "kernel-parameters-estimation-v5": KernelParametersEstimation,
 }
 MODELS = {"transformer": Transformer}
 

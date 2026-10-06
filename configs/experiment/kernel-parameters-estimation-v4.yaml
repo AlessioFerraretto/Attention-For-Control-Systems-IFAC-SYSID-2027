@@ -19,21 +19,21 @@ model:
   model_name: transformer # Name of the layer used
   embedding: transformer-positional-encoding # Embedding type
   layer_name: transformer-encoder-layer # Name of the layer used
-  out_layer: mlp-classifier-for-kernel-parameters-prediction # Output layer type
-  num_layers: 2
+  out_layer: mlp-classifier-for-kernel-parameters-estimation-v4 # Output layer type
+  num_layers: 4
 
   # Layer parameters
-  input_dim: 2
-  model_dim: 8
+  input_dim: 1
+  model_dim: 64
   num_heads: 8
   output_dim: ${model.model_dim}
   activation_function: gelu
   dropout: 0.1
 
-  # Only for out_layer = mlp-classifier
-  input_dim_classifier: "${mul: 2, ${model.output_dim} }" # Input dimension of the classifier = output_dim * 2
+  # Only for out_layer = "mlp-classifier" or out_layer = "token-wise-readout"
+  input_dim_classifier: "${mul: 1, ${model.output_dim} }" # Input dimension of the classifier = output_dim * 1
   hidden_dim_classifier: "${div: ${model.input_dim_classifier}, 2 }" # Hidden dimension of the classifier = input_dim_classifier/2
-  output_dim_classifier: 2 # Output dimension of the classifier = 2
+  output_dim_classifier: 1 # Output dimension of the classifier = 2
   out_bias1_classifier: True # Biases of classifier hidden layer and out layer
   out_bias2_classifier: True # Biases of classifier hidden layer and out layer
 
@@ -44,14 +44,14 @@ model:
   out_dir_name: "transformer"
 
 dataset:
-  name: kernel-parameters-prediction
-  description: stable spline kernel generator of the type [ [u, y] , padding] -> [alpha, c]
+  name: kernel-parameters-estimation-v4
+  description: stable spline kernel generator of the type [g, alpha, padding] -> [c]
 
   shuffle: False # The sequences are already generated randomly
 
   batches_per_epoch: 1000
 
-  g_length: 2
+  g_length: 64
   n: 100
   n_past: 0
   n_future: "${dataset.n}"
@@ -67,11 +67,11 @@ dataset:
   low_pass_cutoff: null
   low_pass_cutoff_order: null
 
-  out_dir_name: "kernel-parameters-prediction"
+  out_dir_name: "kernel-parameters-estimation-v4"
 
 wandb:
   enable: True
   project: AttentionForControlSystems
   entity: alessioferraretto-unipd
-  dataset: kernel-parameters-prediction
+  dataset: kernel-parameters-estimation-v4
   model_name: "transformer"

@@ -20,7 +20,7 @@ model:
   model_name: transformer # Name of the layer used
   embedding: transformer-positional-encoding # Embedding type
   layer_name: transformer-encoder-layer # Name of the layer used
-  out_layer: token-wise-readout-for-impulse-response-prediction # Output layer type
+  out_layer: token-wise-readout # Output layer type
   num_layers: 4
 
   # Layer parameters
@@ -31,7 +31,7 @@ model:
   activation_function: gelu
   dropout: 0.1
 
-  # Only for out_layer = mlp-classifier or out_layer = token-wise-readout-for-impulse-response-prediction
+  # Only for out_layer = mlp-classifier or out_layer = token-wise-readout
   input_dim_classifier: "${model.output_dim}" # Input dimension of the classifier = output_dim
   hidden_dim_classifier: "${model.output_dim}" # Hidden dimension of the classifier = output_dim
   output_dim_classifier: 1 # Output dimension of the classifier = 1

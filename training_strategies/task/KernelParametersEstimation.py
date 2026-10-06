@@ -7,7 +7,7 @@ from utils.Estimators import compute_mmse
 from utils.StableSplineGenerator import BATCHED_KERNELS
 
 
-class KernelParametersPrediction:
+class KernelParametersEstimation:
     def __init__(self, cfg):
         self.requires_y_in_input = False
         self.kernel_type = cfg.dataset.kernel

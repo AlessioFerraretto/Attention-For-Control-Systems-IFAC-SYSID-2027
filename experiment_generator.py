@@ -29,7 +29,7 @@ model:
   model_name: transformer # Name of the layer used
   embedding: transformer-positional-encoding # Embedding type
   layer_name: transformer-encoder-layer # Name of the layer used
-  out_layer: token-wise-readout-for-impulse-response-prediction # Output layer type
+  out_layer: token-wise-readout # Output layer type
   num_layers: VAR_1
 
   # Layer parameters
