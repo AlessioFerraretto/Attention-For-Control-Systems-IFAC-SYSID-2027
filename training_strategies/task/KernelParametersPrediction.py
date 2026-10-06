@@ -26,12 +26,6 @@ class KernelParametersPrediction:
         param1 = p[:, 0]
         c_param = p[:, 1]
 
-        if self.kernel_type == "stable_spline":
-            param1 = torch.clamp(param1, 1e-5, 0.9999)
-        else:
-            param1 = torch.clamp(param1, 1e-5, None)
-        c_param = torch.clamp(c_param, 1e-5, None)
-
         u_batch = info["u"].to(predictions.device)
         y_batch = info["y"].to(predictions.device)
         true_g = info["g"].to(predictions.device)
@@ -59,12 +53,6 @@ class KernelParametersPrediction:
 
         param1 = preds[:, 0]
         c_param = preds[:, 1]
-
-        if self.kernel_type == "stable_spline":
-            param1 = torch.clamp(param1, 1e-5, 0.9999)
-        else:
-            param1 = torch.clamp(param1, 1e-5, None)
-        c_param = torch.clamp(c_param, 1e-5, None)
 
         K = BATCHED_KERNELS[self.kernel_type](g_length, c_param, param1)
 
