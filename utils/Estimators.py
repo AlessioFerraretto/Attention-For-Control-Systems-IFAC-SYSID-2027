@@ -138,55 +138,66 @@ def compute_mmse(
 
 
 def compute_hutchinson_df_and_sure(
-    model, inputs_orig, masks, u, y, noise_var, g_length, M=5
+    model,
+    inputs_orig,
+    masks,
+    u,
+    y,
+    noise_var,
+    g_length,
+    task,
+    M=5,
 ):
     """
     Computes the effective Degrees of Freedom (df) and SURE estimate using Hutchinson's stochastic trace method.
+    Relies on Task polymorphism to route gradient injection and y_hat construction.
     """
     B, n = y.shape
 
-    # 1. Prepare y for gradient computation
     y_with_grad = y.clone().requires_grad_(True)
+    inputs_with_grad = inputs_orig.clone()
 
-    # 2. Reconstruct the input tensor while preserving the computational graph (based on the Dataset's __getitem__)
-    uy = torch.stack([u, y_with_grad], dim=-1)  # (B, n, 2)
-    padding_part = inputs_orig[:, n:, :]  # (B, g_length, 2)
-    inputs_with_grad = torch.cat([uy, padding_part], dim=1)
+    # The task explicitly defines if it needs 'y' in the input tensor
+    if task.requires_y_in_input:
+        inputs_with_grad[:, :n, 1] = y_with_grad
 
-    # 3. Forward pass of the "frozen" model
-    g_hat, _ = model(inputs_with_grad, masks)
+    # 1. Forward pass
+    preds, _ = model(inputs_with_grad, masks)
 
-    # 4. Convolution y_hat = U * g_hat (Vectorized Toeplitz Matrix approach)
-    # y_hat_i = sum_{j=0}^{g_length-1} g_j * u_{i-j}
-    u_padded = torch.nn.functional.pad(u, (g_length - 1, 0))
-    U = u_padded.unfold(dimension=1, size=g_length, step=1)
-    U = torch.flip(U, dims=[2])
-    y_hat = torch.bmm(U, g_hat.unsqueeze(-1)).squeeze(-1)  # Shape: (B, n)
+    # 2. Polymorphic y_hat construction
+    y_hat = task.compute_y_hat(
+        preds=preds,
+        u=u,
+        y_with_grad=y_with_grad,
+        noise_var=noise_var,
+        g_length=g_length,
+    )
 
-    # 5. Hutchinson's method to estimate df = tr(dy_hat / dy)
+    # 3. Hutchinson Trace Estimation
     df_estimate = torch.zeros(B, device=y.device)
     for _ in range(M):
-        # Rademacher vector (equiprobable -1 or +1 values)
         z = (torch.randint(0, 2, size=y_hat.shape, device=y.device).float() * 2) - 1.0
 
-        # Vector-Jacobian Product (VJP) via autograd
         vjp = torch.autograd.grad(
             outputs=y_hat,
             inputs=y_with_grad,
             grad_outputs=z,
             retain_graph=True,
             create_graph=False,
+            allow_unused=True,
         )[0]
 
-        df_estimate += torch.sum(z * vjp, dim=1)
+        if vjp is not None:
+            df_estimate += torch.sum(z * vjp, dim=1)
 
     df_estimate /= M
 
-    # 6. Compute SURE Risk estimate: ||y - y_hat||^2 + 2 * \sigma^2 * df - n * \sigma^2
+    # 4. Compute SURE Risk
     residuals_sq = torch.sum((y - y_hat) ** 2, dim=1)
-    sure_estimate = residuals_sq + 2 * noise_var * df_estimate - n * noise_var
+    sure_estimate = (
+        residuals_sq + 2 * noise_var.squeeze() * df_estimate - n * noise_var.squeeze()
+    )
 
-    # Return detached estimates for safe logging and accumulation
     return df_estimate.detach(), sure_estimate.detach()
 
 

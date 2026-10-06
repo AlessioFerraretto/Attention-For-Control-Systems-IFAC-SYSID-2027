@@ -319,17 +319,13 @@ def training(
         if cfg.save_checkpoints:
             ckpt_manager.save_checkpoint(epoch, model, opt, val_loss, fit)
 
-        log.info("SAVE THINGS")
-
         # Save best model in terms of accuracy
         if fit > best_fit:
-            log.info("SAVE THINGS 111111111")
             best_fit = fit
             ckpt_manager.save_best(model, ModelCriteria.ACC, opt, val_loss, fit)
 
         # Save best model in terms of loss
         if val_loss < best_val_loss:
-            log.info("SAVE THINGS 222222222")
             best_val_loss = val_loss
             ckpt_manager.save_best(model, ModelCriteria.LOSS, opt, val_loss, fit)
 
@@ -453,6 +449,7 @@ def evaluate_test_set(
 
             u_batch = info["u"].to(device)
             y_batch = info["y"].to(device)
+            true_g = info["g"].to(device)
             noise_var_batch = info["noise_variance"].to(device)
             matrix_kernel_batch = info["kernel_matrix"].to(device)
             g_length = test_loader.dataset.g_length
@@ -466,7 +463,7 @@ def evaluate_test_set(
                 loss = loss_fn(preds, targets).item() * batch_size
                 totals["loss"][crit] += loss
 
-                metrics = strategy.compute_metrics(preds, targets)
+                metrics = strategy.compute_metrics(preds, targets, info)
                 totals["fit"][crit] += metrics["fit"] * batch_size
 
                 # Compute DF and SURE (Temporarily re-enable gradients)
@@ -479,6 +476,7 @@ def evaluate_test_set(
                         y_batch,
                         noise_var_batch,
                         g_length,
+                        task=strategy.task,
                         M=5,
                     )
                 totals["df"][crit] += df_batch.sum().item()
@@ -486,13 +484,13 @@ def evaluate_test_set(
 
             # --- BASELINES PREDICTIONS ---
             ls_estimate, fit_ls_batch, best_order = compute_ls(
-                u_batch, y_batch, targets, g_length
+                u_batch, y_batch, true_g, g_length
             )
             mmse_estimate, fit_mmse_batch = compute_mmse(
-                u_batch, y_batch, targets, noise_var_batch, matrix_kernel_batch
+                u_batch, y_batch, true_g, noise_var_batch, matrix_kernel_batch
             )
             impulseest_estimate, fit_impulseest_batch = compute_impulseest(
-                u_batch, y_batch, targets, noise_var_batch, matrix_kernel_batch
+                u_batch, y_batch, true_g, noise_var_batch, matrix_kernel_batch
             )
 
             # --- BASELINES DF & SURE ---
@@ -525,7 +523,7 @@ def evaluate_test_set(
 
             # --- STORE RESULTS ---
             results_manager.update(
-                true_impulse_response=targets,
+                true_impulse_response=true_g,
                 ls_estimate=ls_estimate,
                 mmse_estimate=mmse_estimate,
                 impulseest_estimate=impulseest_estimate,
@@ -636,7 +634,7 @@ def _evaluate(model, loader, loss_fn, device, strategy=None, wandb_logger=None):
 
             total_loss += loss_fn(preds, targets).item() * batch_size
 
-            performance_metrics = strategy.compute_metrics(preds, targets)
+            performance_metrics = strategy.compute_metrics(preds, targets, info)
             fit += performance_metrics["fit"] * batch_size
 
             total += batch_size

@@ -6,36 +6,26 @@ from models.ScaleInvariantLoss import ScaleInvariantLoss
 
 
 class FuturePrediction:
+    def __init__(self, cfg):
+        self.requires_y_in_input = True
+
     def loss_fn(self) -> Callable:
-        # return torch.nn.MSELoss()
         return ScaleInvariantLoss()
 
-    def compute_metrics(self, predictions, targets):
+    def compute_metrics(self, predictions, targets, info=None):
         """
-        Computes the FIT metric between predicted and true impulse responses.
-
-        Parameters:
-            predictions : torch.Tensor
-                Predicted impulse responses with shape (batch_size, g_length).
-            targets : torch.Tensor
-                Ground-truth impulse responses with shape (batch_size, g_length).
-
-        Returns:
-            dict: A dictionary containing 'fit', the closer to 100 the better.
+        Computes the FIT metric by projecting the predicted kernel parameters
+        into the impulse response space and comparing it with the true 'g'.
         """
-        # Cast to float to ensure accurate computation
         predictions = predictions.float()
         targets = targets.float()
-
-        # Calculate the FIT metric (batch-wise, then averaged)
-        # Compute the L2 (Euclidean) norm along the sequence dimension (dim=-1)
         norm_diff = torch.linalg.vector_norm(targets - predictions, dim=-1)
         norm_true = torch.linalg.vector_norm(targets, dim=-1)
-
-        # Add an epsilon to the denominator to avoid division by zero
         fit_per_sample = 100.0 * (1.0 - (norm_diff / (norm_true + 1e-8)))
+        return {"fit": torch.mean(fit_per_sample).item()}
 
-        # Compute the mean FIT across the batch
-        mean_fit = torch.mean(fit_per_sample)
-
-        return {"fit": mean_fit.item()}
+    def compute_y_hat(self, preds, u, y_with_grad, noise_var, g_length):
+        """Computes the estimated output y_hat using the predicted kernel parameters and the input u."""
+        B, n = y_with_grad.shape
+        y_hat = preds[:, :n, -1] if preds.dim() == 3 else preds[:, :n]
+        return y_hat

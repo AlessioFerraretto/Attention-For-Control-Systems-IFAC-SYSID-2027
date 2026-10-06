@@ -49,6 +49,7 @@ dataset:
   description: stable spline kernel generator of the type [g, padding] -> [alpha, c]
 
   shuffle: False # The sequences are already generated randomly
+  kernel: "stable_spline" # "stable_spline" or "gaussian"
 
   batches_per_epoch: 1000
 
@@ -71,7 +72,7 @@ dataset:
   filter_type: "type_1" # "white": white noise or "type_1": 1 / (z - a) or "type_2": (1 - a) (z - a)
   a_param: 0.9
 
-  out_dir_name: "dynamic-impulse-response-prediction"
+  out_dir_name: "kernel-parameters-prediction-v3"
 
 wandb:
   enable: True

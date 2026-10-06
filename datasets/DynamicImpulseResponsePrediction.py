@@ -118,6 +118,7 @@ class DynamicImpulseResponsePrediction(Dataset):
         info = {
             "u": u,
             "y": y,
+            "g": g,
             "noise_variance": noise_variance,
             "kernel_matrix": kernel_matrix,
             "g_length": self.g_length,

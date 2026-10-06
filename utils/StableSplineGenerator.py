@@ -57,6 +57,39 @@ def sample_gaussian_impulse_response(
     return g, {"c": c, "eta": eta}
 
 
+def generate_stable_spline_kernel_batched(
+    g_length,
+    alpha_batch,
+    c_batch,
+):
+    """Batched generation of first-order stable spline covariance matrix."""
+    device = c_batch.device
+    B = c_batch.shape[0]
+    k_idx = torch.arange(1, g_length + 1, device=device)
+    max_indices = torch.maximum(k_idx[:, None], k_idx).float()
+
+    return c_batch.view(B, 1, 1) * (
+        alpha_batch.view(B, 1, 1) ** max_indices.unsqueeze(0)
+    )
+
+
+def generate_gaussian_kernel_batched(g_length, eta_batch, c_batch):
+    """Batched generation of Gaussian (RBF) covariance matrix."""
+    device = c_batch.device
+    B = c_batch.shape[0]
+    idx = torch.arange(1, g_length + 1, dtype=torch.float, device=device)
+    dist_sq = (idx[:, None] - idx[None, :]) ** 2
+
+    return c_batch.view(B, 1, 1) * torch.exp(
+        -eta_batch.view(B, 1, 1) * dist_sq.unsqueeze(0)
+    )
+
+
+BATCHED_KERNELS = {
+    "stable_spline": generate_stable_spline_kernel_batched,
+    "gaussian": generate_gaussian_kernel_batched,
+}
+
 KERNELS = {
     "stable_spline": sample_stable_spline_impulse_response,
     "gaussian": sample_gaussian_impulse_response,
