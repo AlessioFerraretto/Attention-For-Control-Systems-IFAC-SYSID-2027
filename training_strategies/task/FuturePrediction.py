@@ -24,8 +24,8 @@ class FuturePrediction:
         fit_per_sample = 100.0 * (1.0 - (norm_diff / (norm_true + 1e-8)))
         return {"fit": torch.mean(fit_per_sample).item()}
 
-    def compute_y_hat(self, preds, u, y_with_grad, noise_var, g_length):
+    def compute_y_hat(self, predictions, info, u, y_with_grad):
         """Computes the estimated output y_hat using the predicted kernel parameters and the input u."""
         B, n = y_with_grad.shape
-        y_hat = preds[:, :n, -1] if preds.dim() == 3 else preds[:, :n]
+        y_hat = predictions[:, :n, -1] if predictions.dim() == 3 else predictions[:, :n]
         return y_hat

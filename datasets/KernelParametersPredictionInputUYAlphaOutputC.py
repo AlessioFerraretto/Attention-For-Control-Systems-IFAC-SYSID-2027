@@ -1,23 +1,17 @@
-"""
-Uses a fixed system (alpha, c) given.
-Fixes (g) using the given system (alpha, c).
-Dynamically generates u and y given the fixed (g)
-The generator output is of the form [[u],[y]] -> [alpha,c].
-"""
-
 import torch
 from torch.utils.data import Dataset
 
 from utils.SeedManager import SeedManager
 from utils.StableSplineGenerator import (
+    KERNELS,
     generate_stable_spline,
 )
 
 
-class KernelParametersPredictionV5(Dataset):
+class KernelParametersPredictionInputUYAlphaOutputC(Dataset):
     def __init__(self, cfg, batch_size):
-        """Generates a static dataset of synthetic linear systems."""
-        self.batch_size = batch_size  # TODO: Find a more elegant way
+        """Generates a dataset predicting 'c' given 'u', 'y' and 'alpha' (or 'eta')."""
+        self.batch_size = batch_size
         self.batches_per_epoch = cfg.dataset.batches_per_epoch
 
         self.g_length = cfg.dataset.g_length
@@ -39,12 +33,12 @@ class KernelParametersPredictionV5(Dataset):
         self.input_dim = cfg.model.input_dim
         self.filter_type = cfg.dataset.filter_type
         self.a_param = cfg.dataset.a_param
+        self.kernel_type = cfg.dataset.kernel
 
     def __len__(self):
         return self.batches_per_epoch * self.batch_size
 
     def __getitem__(self, idx):
-        # Generate (alpha, c) with which to generate (g) using the fixed system (c, alpha)
         alpha = (self.alpha_max - self.alpha_min) * SeedManager().dataset_rand(
             1
         ).item() + self.alpha_min
@@ -67,21 +61,46 @@ class KernelParametersPredictionV5(Dataset):
             self.jitter_regularization_parameter,
             self.filter_type,
             self.a_param,
+            kernel=self.kernel_type,
         )
 
+        u = torch.cat([sample["u_past"], sample["u_future"]], dim=0)
+        y = torch.cat([sample["y_past"], sample["y_future"]], dim=0)
         g = sample["g"]
+        snr = sample["snr"]
 
+        uy = torch.stack([u, y], dim=-1)
+
+        # 1. Create the prompt token containing the unknown parameter (alpha or eta)
+        param1 = alpha if self.kernel_type == "stable_spline" else eta
+        param1_tensor = torch.tensor([[param1, 0.0]], dtype=torch.float)
+
+        # 2. Create the padding token
         padding_tensor = torch.full(
-            size=(2,),
-            fill_value=self.padding,
-            dtype=torch.float,
+            size=(2, 2), fill_value=self.padding, dtype=torch.float
         )
 
-        alpha_tensor = torch.tensor([c], dtype=torch.float)
+        # 3. Concatenate the prompt, input data, and padding tokens
+        input = torch.cat([uy, param1_tensor, padding_tensor], dim=0)
 
-        input = torch.cat([g, alpha_tensor, padding_tensor])
-        input = input.unsqueeze(-1)
+        # 4. The target contains only the parameter c
+        target = torch.tensor([c], dtype=torch.float)
 
-        target = torch.tensor([alpha], dtype=torch.float)
+        var_y = torch.var(y, unbiased=False)
+        noise_variance = var_y / (snr + 1.0)
+        K = KERNELS[self.kernel_type](self.g_length, alpha=alpha, eta=eta, c=c)
 
-        return input, target
+        info = {
+            "u": u.float(),
+            "y": y.float(),
+            "g": g.float(),
+            "c": torch.tensor(c, dtype=torch.float),
+            "alpha": torch.tensor(alpha, dtype=torch.float),
+            "eta": torch.tensor(eta, dtype=torch.float),
+            "noise_variance": noise_variance.float(),
+            "kernel_matrix": K.float(),
+            "g_length": self.g_length,
+            "kernel_type": self.kernel_type,
+        }
+
+        return input, target, info

@@ -1,20 +1,14 @@
-"""
-Uses a fixed system (alpha, c) given.
-Fixes (g) using the given system (alpha, c).
-Dynamically generates u and y given the fixed (g)
-The generator output is of the form [[u],[y]] -> [alpha,c].
-"""
-
 import torch
 from torch.utils.data import Dataset
 
-from utils import SeedManager
+from utils.SeedManager import SeedManager
 from utils.StableSplineGenerator import (
+    KERNELS,
     generate_stable_spline,
 )
 
 
-class KernelParametersPredictionV2(Dataset):
+class KernelParametersPredictionInputUYOutputAlphaC(Dataset):
     def __init__(self, cfg, batch_size):
         """Generates a static dataset of synthetic linear systems."""
         self.batch_size = batch_size  # TODO: Find a more elegant way
@@ -39,6 +33,7 @@ class KernelParametersPredictionV2(Dataset):
         self.input_dim = cfg.model.input_dim
         self.filter_type = cfg.dataset.filter_type
         self.a_param = cfg.dataset.a_param
+        self.kernel_type = cfg.dataset.kernel
 
     def __len__(self):
         return self.batches_per_epoch * self.batch_size
@@ -67,6 +62,7 @@ class KernelParametersPredictionV2(Dataset):
             self.jitter_regularization_parameter,
             self.filter_type,
             self.a_param,
+            kernel=self.kernel_type,
         )
 
         # Splitting
@@ -75,12 +71,13 @@ class KernelParametersPredictionV2(Dataset):
         u_future = sample["u_future"]
         y_future = sample["y_future"]
         g = sample["g"]
+        snr = sample["snr"]
 
         u = torch.cat([u_past, u_future], dim=0)
         y = torch.cat([y_past, y_future], dim=0)
 
         padding_tensor = torch.full(
-            size=(1, 2),
+            size=(2, 2),
             fill_value=self.padding,
             dtype=torch.float,
         )
@@ -88,6 +85,28 @@ class KernelParametersPredictionV2(Dataset):
         uy = torch.stack([u, y], dim=-1)
         input = torch.cat([uy, padding_tensor], dim=0)
 
-        target = torch.tensor([alpha * c], dtype=torch.float)
+        target = torch.tensor(
+            [alpha if self.kernel_type == "stable_spline" else eta, c],
+            dtype=torch.float,
+        )
 
-        return input, target
+        # Build the info for the evaluation of the estimators
+        var_y = torch.var(y, unbiased=False)
+        noise_variance = var_y / (snr + 1.0)
+
+        K = KERNELS[self.kernel_type](self.g_length, alpha=alpha, eta=eta, c=c)
+
+        info = {
+            "u": u.float(),
+            "y": y.float(),
+            "g": g.float(),
+            "c": torch.tensor(c, dtype=torch.float),
+            "alpha": torch.tensor(alpha, dtype=torch.float),
+            "eta": torch.tensor(eta, dtype=torch.float),
+            "noise_variance": noise_variance.float(),
+            "kernel_matrix": K.float(),
+            "g_length": self.g_length,
+            "kernel_type": self.kernel_type,
+        }
+
+        return input, target, info

@@ -13,7 +13,7 @@ from torch import nn
 from monitor.TrackableModule import TrackableModule
 
 
-class TokenWiseReadoutForImpulseResponse(TrackableModule):
+class TokenWiseReadout(TrackableModule):
     """Build a token-wise feed-forward readout for impulse response prediction.
 
     The readout consumes a temporal window of features and produces a single

@@ -24,7 +24,7 @@ model:
   num_layers: 2
 
   # Layer parameters
-  input_dim: 1
+  input_dim: 2
   model_dim: 64
   num_heads: 8
   output_dim: ${model.model_dim}
@@ -45,8 +45,8 @@ model:
   out_dir_name: "transformer"
 
 dataset:
-  name: kernel-parameters-estimation-v3
-  description: stable spline kernel generator of the type [g, padding] -> [alpha, c]
+  name: kernel-parameters-estimation-input-uy-output-alpha-c
+  description: stable spline kernel generator of the type [ [u, y], padding] -> [alpha, c]
 
   shuffle: False # The sequences are already generated randomly
   kernel: "stable_spline" # "stable_spline" or "gaussian"
@@ -72,11 +72,11 @@ dataset:
   filter_type: "type_1" # "white": white noise or "type_1": 1 / (z - a) or "type_2": (1 - a) (z - a)
   a_param: 0.9
 
-  out_dir_name: "kernel-parameters-estimation-v3"
+  out_dir_name: "kernel-parameters-estimation-input-uy-output-alpha-c"
 
 wandb:
   enable: True
   project: AttentionForControlSystems
   entity: alessioferraretto-unipd
-  dataset: kernel-parameters-estimation-v3
+  dataset: kernel-parameters-estimation-input-uy-output-alpha-c
   model_name: "transformer"

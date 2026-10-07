@@ -1,8 +1,14 @@
 from training_strategies.models.Transformer import Transformer
 from training_strategies.task.FuturePrediction import FuturePrediction
 from training_strategies.task.ImpulseResponsePrediction import ImpulseResponsePrediction
-from training_strategies.task.KernelParametersEstimation import (
-    KernelParametersEstimation,
+from training_strategies.task.KernelParametersEstimationOutputAlpha import (
+    KernelParametersEstimationOutputAlpha,
+)
+from training_strategies.task.KernelParametersEstimationOutputAlphaC import (
+    KernelParametersEstimationOutputAlphaC,
+)
+from training_strategies.task.KernelParametersEstimationOutputC import (
+    KernelParametersEstimationOutputC,
 )
 from training_strategies.TrainingStrategy import TrainingStrategy
 
@@ -14,11 +20,12 @@ TASKS = {
     "dynamic-future-prediction-v3": FuturePrediction,
     "impulse-response-prediction": ImpulseResponsePrediction,
     "dynamic-impulse-response-prediction": ImpulseResponsePrediction,
-    "kernel-parameters-estimation": KernelParametersEstimation,
-    "kernel-parameters-estimation-v2": KernelParametersEstimation,
-    "kernel-parameters-estimation-v3": KernelParametersEstimation,
-    "kernel-parameters-estimation-v4": KernelParametersEstimation,
-    "kernel-parameters-estimation-v5": KernelParametersEstimation,
+    "kernel-parameters-estimation-input-uy-output-alpha-c": KernelParametersEstimationOutputAlphaC,
+    "kernel-parameters-estimation-input-uy-alpha-output-c": KernelParametersEstimationOutputC,
+    "kernel-parameters-estimation-input-uy-c-output-alpha": KernelParametersEstimationOutputAlpha,
+    "kernel-parameters-estimation-input-g-output-alpha-c": KernelParametersEstimationOutputAlphaC,
+    "kernel-parameters-estimation-input-g-alpha-output-c": KernelParametersEstimationOutputC,
+    "kernel-parameters-estimation-input-g-c-output-alpha": KernelParametersEstimationOutputAlpha,
 }
 MODELS = {"transformer": Transformer}
 

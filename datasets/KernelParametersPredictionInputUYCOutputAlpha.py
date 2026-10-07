@@ -1,23 +1,17 @@
-"""
-Uses a fixed system (alpha, c) given.
-Fixes (g) using the given system (alpha, c).
-Dynamically generates u and y given the fixed (g)
-The generator output is of the form [[u],[y]] -> [alpha,c].
-"""
-
 import torch
 from torch.utils.data import Dataset
 
 from utils.SeedManager import SeedManager
 from utils.StableSplineGenerator import (
+    KERNELS,
     generate_stable_spline,
 )
 
 
-class KernelParametersPredictionV3(Dataset):
+class KernelParametersPredictionInputUYCOutputAlpha(Dataset):
     def __init__(self, cfg, batch_size):
-        """Generates a static dataset of synthetic linear systems."""
-        self.batch_size = batch_size  # TODO: Find a more elegant way
+        """Generates a dataset predicting 'alpha' (or 'eta') given 'u', 'y' and 'c'."""
+        self.batch_size = batch_size
         self.batches_per_epoch = cfg.dataset.batches_per_epoch
 
         self.g_length = cfg.dataset.g_length
@@ -39,12 +33,12 @@ class KernelParametersPredictionV3(Dataset):
         self.input_dim = cfg.model.input_dim
         self.filter_type = cfg.dataset.filter_type
         self.a_param = cfg.dataset.a_param
+        self.kernel_type = cfg.dataset.kernel
 
     def __len__(self):
         return self.batches_per_epoch * self.batch_size
 
     def __getitem__(self, idx):
-        # Generate (alpha, c) with which to generate (g) using the fixed system (c, alpha)
         alpha = (self.alpha_max - self.alpha_min) * SeedManager().dataset_rand(
             1
         ).item() + self.alpha_min
@@ -67,51 +61,46 @@ class KernelParametersPredictionV3(Dataset):
             self.jitter_regularization_parameter,
             self.filter_type,
             self.a_param,
+            kernel=self.kernel_type,
         )
 
-        # Splitting
-        u_past = sample["u_past"]
-        y_past = sample["y_past"]
-        u_future = sample["u_future"]
-        y_future = sample["y_future"]
+        u = torch.cat([sample["u_past"], sample["u_future"]], dim=0)
+        y = torch.cat([sample["y_past"], sample["y_future"]], dim=0)
         g = sample["g"]
+        snr = sample["snr"]
 
-        u = torch.cat([u_past, u_future], dim=0)
-        y = torch.cat([y_past, y_future], dim=0)
+        uy = torch.stack([u, y], dim=-1)
 
+        # 1. Create the prompt token containing the known parameter c
+        c_tensor = torch.tensor([[c, 0.0]], dtype=torch.float)
+
+        # 2. Create the padding token
         padding_tensor = torch.full(
-            size=(2,),
-            fill_value=self.padding,
-            dtype=torch.float,
+            size=(2, 2), fill_value=self.padding, dtype=torch.float
         )
 
-        input = torch.cat([g, padding_tensor])
-        input = input.unsqueeze(-1)
+        # 3. Concatenate the prompt, input data, and padding tokens
+        input = torch.cat([uy, c_tensor, padding_tensor], dim=0)
 
-        target = torch.tensor([alpha, c], dtype=torch.float)
+        # 4. The target contains the unknown parameter alpha or eta
+        param1 = alpha if self.kernel_type == "stable_spline" else eta
+        target = torch.tensor([param1], dtype=torch.float)
 
-        # Build the info for the evaluation of the estimators
-
-        # 1. Exact reconstruction of the noise variance.
-        # Given that y = y_0 + e, and SNR = Var(y_0) / Var(e),
-        # we can derive: Var(e) = Var(y) / (SNR + 1.0)
-        snr = sample["eta"]["snr"]
         var_y = torch.var(y, unbiased=False)
         noise_variance = var_y / (snr + 1.0)
-
-        # 2. Reconstruction of the TC Kernel Matrix
-        # K(k,j) = c * alpha^max(k,j)
-        k_idx = torch.arange(1, self.g_length + 1)
-        max_indices = torch.maximum(k_idx[:, None], k_idx)
-        kernel_matrix = c * (alpha**max_indices)
+        K = KERNELS[self.kernel_type](self.g_length, alpha=alpha, eta=eta, c=c)
 
         info = {
-            "u": u,
-            "y": y,
-            "g": g,
-            "noise_variance": noise_variance,
-            "kernel_matrix": kernel_matrix,
+            "u": u.float(),
+            "y": y.float(),
+            "g": g.float(),
+            "c": torch.tensor(c, dtype=torch.float),
+            "alpha": torch.tensor(alpha, dtype=torch.float),
+            "eta": torch.tensor(eta, dtype=torch.float),
+            "noise_variance": noise_variance.float(),
+            "kernel_matrix": K.float(),
             "g_length": self.g_length,
+            "kernel_type": self.kernel_type,
         }
 
         return input, target, info

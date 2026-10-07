@@ -1,10 +1,3 @@
-"""
-Uses a fixed system (alpha, c) given.
-Fixes (g) using the given system (alpha, c).
-Dynamically generates u and y given the fixed (g)
-The generator output is of the form [[u],[y]] -> [alpha,c].
-"""
-
 import torch
 from torch.utils.data import Dataset
 
@@ -14,7 +7,7 @@ from utils.StableSplineGenerator import (
 )
 
 
-class KernelParametersPredictionV4(Dataset):
+class KernelParametersPredictionInputGOutputAlphaC(Dataset):
     def __init__(self, cfg, batch_size):
         """Generates a static dataset of synthetic linear systems."""
         self.batch_size = batch_size  # TODO: Find a more elegant way
@@ -69,7 +62,15 @@ class KernelParametersPredictionV4(Dataset):
             self.a_param,
         )
 
+        # Splitting
+        u_past = sample["u_past"]
+        y_past = sample["y_past"]
+        u_future = sample["u_future"]
+        y_future = sample["y_future"]
         g = sample["g"]
+
+        u = torch.cat([u_past, u_future], dim=0)
+        y = torch.cat([y_past, y_future], dim=0)
 
         padding_tensor = torch.full(
             size=(2,),
@@ -77,11 +78,33 @@ class KernelParametersPredictionV4(Dataset):
             dtype=torch.float,
         )
 
-        alpha_tensor = torch.tensor([alpha], dtype=torch.float)
-
-        input = torch.cat([g, alpha_tensor, padding_tensor])
+        input = torch.cat([g, padding_tensor])
         input = input.unsqueeze(-1)
 
-        target = torch.tensor([c], dtype=torch.float)
+        target = torch.tensor([alpha, c], dtype=torch.float)
 
-        return input, target
+        # Build the info for the evaluation of the estimators
+
+        # 1. Exact reconstruction of the noise variance.
+        # Given that y = y_0 + e, and SNR = Var(y_0) / Var(e),
+        # we can derive: Var(e) = Var(y) / (SNR + 1.0)
+        snr = sample["snr"]
+        var_y = torch.var(y, unbiased=False)
+        noise_variance = var_y / (snr + 1.0)
+
+        # 2. Reconstruction of the TC Kernel Matrix
+        # K(k,j) = c * alpha^max(k,j)
+        k_idx = torch.arange(1, self.g_length + 1)
+        max_indices = torch.maximum(k_idx[:, None], k_idx)
+        kernel_matrix = c * (alpha**max_indices)
+
+        info = {
+            "u": u,
+            "y": y,
+            "g": g,
+            "noise_variance": noise_variance,
+            "kernel_matrix": kernel_matrix,
+            "g_length": self.g_length,
+        }
+
+        return input, target, info

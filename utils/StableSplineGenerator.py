@@ -12,7 +12,7 @@ import torch.nn.functional as F
 from utils.SeedManager import SeedManager
 
 
-def generate_stable_spline_kernel(impulse_length, c, alpha):
+def generate_stable_spline_kernel(impulse_length, alpha, c, eta=None):
     """Generate a first-order stable spline covariance matrix using PyTorch."""
     idx = torch.arange(1, impulse_length + 1)
     max_indices = torch.maximum(idx[:, None], idx)
@@ -27,7 +27,7 @@ def sample_stable_spline_impulse_response(
     Call this ONCE per system you want to identify (e.g., in Dataset __init__)
     to ensure the underlying physics of the system remain constant.
     """
-    K_eta = generate_stable_spline_kernel(g_length, c, alpha)
+    K_eta = generate_stable_spline_kernel(g_length, alpha, c)
     jitter = torch.eye(g_length) * jitter_regularization_parameter
 
     g = SeedManager().dataset_multivariate_normal(K_eta + jitter)
@@ -35,7 +35,7 @@ def sample_stable_spline_impulse_response(
     return g, {"c": c, "alpha": alpha}
 
 
-def generate_gaussian_kernel(impulse_length, c, eta):
+def generate_gaussian_kernel(impulse_length, eta, c, alpha=None):
     """Generate a Gaussian (RBF) covariance matrix using PyTorch.
     Formula: K_{i,j} = c * exp(-eta * (i-j)^2)
     """
@@ -49,7 +49,7 @@ def sample_gaussian_impulse_response(
     g_length, c, alpha, eta, jitter_regularization_parameter
 ):
     """Sample the Gaussian kernel hyperparameters and impulse response 'g'."""
-    K_eta = generate_gaussian_kernel(g_length, c, eta)
+    K_eta = generate_gaussian_kernel(g_length, eta, c)
     jitter = torch.eye(g_length) * jitter_regularization_parameter
 
     g = SeedManager().dataset_multivariate_normal(K_eta + jitter)
@@ -59,30 +59,27 @@ def sample_gaussian_impulse_response(
 
 def generate_stable_spline_kernel_batched(
     g_length,
-    alpha_batch,
-    c_batch,
+    alpha,
+    c,
+    eta=None,
 ):
     """Batched generation of first-order stable spline covariance matrix."""
-    device = c_batch.device
-    B = c_batch.shape[0]
+    device = c.device
+    B = c.shape[0]
     k_idx = torch.arange(1, g_length + 1, device=device)
     max_indices = torch.maximum(k_idx[:, None], k_idx).float()
 
-    return c_batch.view(B, 1, 1) * (
-        alpha_batch.view(B, 1, 1) ** max_indices.unsqueeze(0)
-    )
+    return c.view(B, 1, 1) * (alpha.view(B, 1, 1) ** max_indices.unsqueeze(0))
 
 
-def generate_gaussian_kernel_batched(g_length, eta_batch, c_batch):
+def generate_gaussian_kernel_batched(g_length, eta, c, alpha=None):
     """Batched generation of Gaussian (RBF) covariance matrix."""
-    device = c_batch.device
-    B = c_batch.shape[0]
+    device = c.device
+    B = c.shape[0]
     idx = torch.arange(1, g_length + 1, dtype=torch.float, device=device)
     dist_sq = (idx[:, None] - idx[None, :]) ** 2
 
-    return c_batch.view(B, 1, 1) * torch.exp(
-        -eta_batch.view(B, 1, 1) * dist_sq.unsqueeze(0)
-    )
+    return c.view(B, 1, 1) * torch.exp(-eta.view(B, 1, 1) * dist_sq.unsqueeze(0))
 
 
 BATCHED_KERNELS = {
@@ -91,6 +88,11 @@ BATCHED_KERNELS = {
 }
 
 KERNELS = {
+    "stable_spline": generate_stable_spline_kernel,
+    "gaussian": generate_gaussian_kernel,
+}
+
+IMPULSE_RESPONSES = {
     "stable_spline": sample_stable_spline_impulse_response,
     "gaussian": sample_gaussian_impulse_response,
 }
@@ -185,7 +187,7 @@ def generate_stable_spline(
     n = n_past + n_future
 
     # 1. Sample the system physics
-    g, system_params = KERNELS.get(kernel)(
+    g, system_params = IMPULSE_RESPONSES[kernel](
         g_length,
         c,
         alpha=alpha,
@@ -202,13 +204,12 @@ def generate_stable_spline(
     u_future = u[n_past:]
     y_future = y[n_past:]
 
-    eta_dict = {**system_params, "snr": snr}
-
     return {
         "u_past": u_past,
         "y_past": y_past,
         "u_future": u_future,
         "y_future": y_future,
         "g": g,
-        "eta": eta_dict,
+        "snr": snr,
+        **system_params,
     }

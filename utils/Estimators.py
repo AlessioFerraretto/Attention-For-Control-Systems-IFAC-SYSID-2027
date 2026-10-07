@@ -144,8 +144,8 @@ def compute_hutchinson_df_and_sure(
     u,
     y,
     noise_var,
-    g_length,
     task,
+    info,
     M=5,
 ):
     """
@@ -162,15 +162,14 @@ def compute_hutchinson_df_and_sure(
         inputs_with_grad[:, :n, 1] = y_with_grad
 
     # 1. Forward pass
-    preds, _ = model(inputs_with_grad, masks)
+    predictions, _ = model(inputs_with_grad, masks)
 
     # 2. Polymorphic y_hat construction
     y_hat = task.compute_y_hat(
-        preds=preds,
+        predictions=predictions,
+        info=info,
         u=u,
         y_with_grad=y_with_grad,
-        noise_var=noise_var,
-        g_length=g_length,
     )
 
     # 3. Hutchinson Trace Estimation

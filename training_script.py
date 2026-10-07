@@ -475,8 +475,8 @@ def evaluate_test_set(
                         u_batch,
                         y_batch,
                         noise_var_batch,
-                        g_length,
                         task=strategy.task,
+                        info=info,
                         M=5,
                     )
                 totals["df"][crit] += df_batch.sum().item()

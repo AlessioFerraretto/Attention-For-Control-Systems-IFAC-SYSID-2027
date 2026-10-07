@@ -105,7 +105,7 @@ class DynamicImpulseResponsePrediction(Dataset):
         # 1. Exact reconstruction of the noise variance.
         # Given that y = y_0 + e, and SNR = Var(y_0) / Var(e),
         # we can derive: Var(e) = Var(y) / (SNR + 1.0)
-        snr = sample["eta"]["snr"]
+        snr = sample["snr"]
         var_y = torch.var(y, unbiased=False)
         noise_variance = var_y / (snr + 1.0)
 

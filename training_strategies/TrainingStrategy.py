@@ -41,5 +41,5 @@ class TrainingStrategy:
     def logging_metrics(self, model):  # , precomputed):
         return self.model_comp.logging_metrics(model)  # , precomputed)
 
-    def compute_y_hat(self, preds, u, y_with_grad, noise_var, g_length):
-        return self.task.compute_y_hat(preds, u, y_with_grad, noise_var, g_length)
+    def compute_y_hat(self, predictions, info, u, y_with_grad):
+        return self.task.compute_y_hat(predictions, info, u, y_with_grad)
