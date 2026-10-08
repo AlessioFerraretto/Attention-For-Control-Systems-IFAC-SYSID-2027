@@ -223,7 +223,7 @@ def compute_mmse_df_and_sure(u, y, noise_var, K, g_length):
     H = torch.linalg.solve(UKUT + sigma2_I, UKUT)
 
     # 5. The exact degrees of freedom are the trace of matrix H
-    df_estimate = torch.linalg.trace(H)
+    df_estimate = torch.diagonal(H, dim1=-2, dim2=-1).sum(-1)
 
     # 6. Compute y_hat and SURE
     # y_hat = H y
@@ -349,7 +349,7 @@ def compute_impulseest_df_and_sure(
     H = torch.bmm(U, X)  # Shape: (B, n, n)
 
     # 5. The exact degrees of freedom are the trace of the projection matrix H
-    df_estimate = torch.linalg.trace(H)
+    df_estimate = torch.diagonal(H, dim1=-2, dim2=-1).sum(-1)
 
     # 6. Compute y_hat = H * y and SURE
     y_hat = torch.bmm(H, y.unsqueeze(-1)).squeeze(-1)
