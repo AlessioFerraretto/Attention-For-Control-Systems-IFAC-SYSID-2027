@@ -3,7 +3,7 @@ from collections.abc import Callable
 import torch
 
 from models.ScaleInvariantLoss import ScaleInvariantLoss
-from utils.Estimators import compute_mmse
+from utils.Estimators import build_matrix_U_batched, compute_mmse
 from utils.StableSplineGenerator import BATCHED_KERNELS
 
 
@@ -60,9 +60,7 @@ class KernelParametersEstimationOutputAlphaC:
 
         B, n = y_with_grad.shape
 
-        u_padded = torch.nn.functional.pad(u, (g_length - 1, 0))
-        U = u_padded.unfold(dimension=1, size=g_length, step=1)
-        U = torch.flip(U, dims=[2])
+        U = build_matrix_U_batched(u, g_length)
 
         UK = torch.bmm(U, K)
         UKUT = torch.bmm(UK, U.transpose(1, 2))

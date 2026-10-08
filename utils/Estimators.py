@@ -5,24 +5,26 @@ import torch
 log = logging.getLogger("script")
 
 
-def build_matrix_phi_batched(
+def build_matrix_U_batched(
     input_batch: torch.Tensor, horizon_length: int
 ) -> torch.Tensor:
-    """Builds matrix_phi for an entire batch. input_batch has shape [batch_size, sequence_length]"""
-    batch_size, sequence_length = input_batch.shape
-    matrix_phi = torch.zeros(
-        (batch_size, sequence_length, horizon_length),
-        dtype=input_batch.dtype,
-        device=input_batch.device,
-    )
+    """Builds the regression matrix U (Toeplitz structure) for an entire batch using optimized vectorization.
+    input_batch has shape [batch_size, sequence_length].
+    Returns a tensor of shape [batch_size, sequence_length, horizon_length].
+    """
+    # 1. Pad with (horizon_length - 1) zeros on the left along the sequence dimension
+    u_padded = torch.nn.functional.pad(input_batch, (horizon_length - 1, 0))
 
-    for index in range(horizon_length):
-        if index == 0:
-            matrix_phi[:, :, index] = input_batch
-        else:
-            matrix_phi[:, index:, index] = input_batch[:, :-index]
+    # 2. Create sliding windows along the temporal dimension (dimension=1)
+    # Output shape changes from [batch_size, sequence_length + horizon_length - 1]
+    # to [batch_size, sequence_length, horizon_length]
+    U = u_padded.unfold(dimension=1, size=horizon_length, step=1)
 
-    return matrix_phi
+    # 3. Flip along the last dimension so that index 0 is the input at time t,
+    # and index k is the input at time t-k
+    U = torch.flip(U, dims=[2])
+
+    return U
 
 
 def compute_ls(
@@ -45,13 +47,13 @@ def compute_ls(
     output_vector = output_batch.unsqueeze(-1)
 
     for horizon in range(1, max_length + 1):
-        matrix_phi_batch = build_matrix_phi_batched(
+        U = build_matrix_U_batched(
             input_batch, horizon
         )  # [batch_size, sequence_length, horizon]
 
         # lstsq supports batches. Solves the system for all batch_size samples in parallel
         solution = torch.linalg.lstsq(
-            matrix_phi_batch, output_vector
+            U, output_vector
         ).solution  # [batch_size, horizon, 1]
         estimated_impulse_step = solution.squeeze(-1)  # [batch_size, horizon]
 
@@ -85,20 +87,20 @@ def compute_mmse(
     output_batch: torch.Tensor,
     true_impulse_batch: torch.Tensor,
     noise_variance_batch: torch.Tensor,
-    matrix_kernel_batch: torch.Tensor,
+    K: torch.Tensor,
     g_length: int,
 ):
     """Computes the Minimum Mean Square Error (MMSE) for the entire batch simultaneously."""
     batch_size, sequence_length = input_batch.shape
 
-    matrix_phi = build_matrix_phi_batched(
+    U = build_matrix_U_batched(
         input_batch, g_length
     )  # [batch_size, sequence_length, g_length]
 
     # Batched matrix multiplication
     # transpose(1, 2) transposes only the matrix dimensions, leaving batch_size intact
     matrix_phi_kernel_phi_transposed = (
-        matrix_phi @ matrix_kernel_batch @ matrix_phi.transpose(1, 2)
+        U @ K @ U.transpose(1, 2)
     )  # [batch_size, sequence_length, sequence_length]
 
     # Create the batched identity matrix multiplied by the variances
@@ -120,10 +122,7 @@ def compute_mmse(
     output_vector = output_batch.unsqueeze(-1)  # [batch_size, sequence_length, 1]
 
     estimated_impulse = (
-        matrix_kernel_batch
-        @ matrix_phi.transpose(1, 2)
-        @ matrix_inverse_term
-        @ output_vector
+        K @ U.transpose(1, 2) @ matrix_inverse_term @ output_vector
     )  # [batch_size, impulse_length, 1]
     estimated_impulse = estimated_impulse.squeeze(-1)  # [batch_size, impulse_length]
 
@@ -207,9 +206,7 @@ def compute_mmse_df_and_sure(u, y, noise_var, K, g_length):
     B, n = y.shape
 
     # 1. Build the Toeplitz matrix U for the batch
-    u_padded = torch.nn.functional.pad(u, (g_length - 1, 0))
-    U = u_padded.unfold(dimension=1, size=g_length, step=1)
-    U = torch.flip(U, dims=[2])  # Shape: (B, n, g_length)
+    U = build_matrix_U_batched(u, g_length)  # Shape: (B, n, g_length)
     U_T = U.transpose(1, 2)  # Shape: (B, g_length, n)
 
     # 2. Compute U K U'
@@ -226,7 +223,7 @@ def compute_mmse_df_and_sure(u, y, noise_var, K, g_length):
     H = torch.linalg.solve(UKUT + sigma2_I, UKUT)
 
     # 5. The exact degrees of freedom are the trace of matrix H
-    df_estimate = torch.diagonal(H, dim1=-2, dim2=-1).sum(-1)
+    df_estimate = torch.linalg.trace(H)
 
     # 6. Compute y_hat and SURE
     # y_hat = H y
@@ -252,9 +249,7 @@ def compute_ls_df_and_sure(u, y, noise_var, ls_estimate, best_order):
     df_estimate = best_order.float()
 
     # 2. Calculate y_hat = U * g_hat using the Toeplitz matrix approach
-    u_padded = torch.nn.functional.pad(u, (g_length - 1, 0))
-    U = u_padded.unfold(dimension=1, size=g_length, step=1)
-    U = torch.flip(U, dims=[2])
+    U = build_matrix_U_batched(u, g_length)
 
     y_hat = torch.bmm(U, ls_estimate.unsqueeze(-1)).squeeze(-1)  # Shape: (B, n)
 
@@ -272,7 +267,7 @@ def compute_impulseest(
     output_batch: torch.Tensor,
     true_impulse_batch: torch.Tensor,
     noise_var_batch: torch.Tensor,
-    matrix_kernel_batch: torch.Tensor,
+    K: torch.Tensor,
 ):
     """
     Estimates the impulse response using the TC (Tuned and Correlated) kernel.
@@ -280,14 +275,12 @@ def compute_impulseest(
     the regularized normal equations (Primal space) instead of the Dual space.
     """
     B, n = input_batch.shape
-    g_length = matrix_kernel_batch.shape[-1]
+    g_length = K.shape[-1]
     device = input_batch.device
     dtype = input_batch.dtype
 
     # 1. Build the Toeplitz matrix U
-    u_padded = torch.nn.functional.pad(input_batch, (g_length - 1, 0))
-    U = u_padded.unfold(dimension=1, size=g_length, step=1)
-    U = torch.flip(U, dims=[2])  # Shape: (B, n, g_length)
+    U = build_matrix_U_batched(input_batch, g_length)  # Shape: (B, n, g_length)
     U_T = U.transpose(1, 2)  # Shape: (B, g_length, n)
 
     # 2. Compute U^T * U
@@ -295,7 +288,7 @@ def compute_impulseest(
 
     # 3. Formulate the TC Kernel regularized system: (K * U^T * U + sigma^2 * I) g = K * U^T * y
     # We multiply by K to avoid computing K^-1, which is numerically unstable.
-    K_UT_U = torch.bmm(matrix_kernel_batch, UT_U)
+    K_UT_U = torch.bmm(K, UT_U)
 
     I = torch.eye(g_length, dtype=dtype, device=device).unsqueeze(0).expand(B, -1, -1)
     sigma2_I = noise_var_batch.view(B, 1, 1) * I
@@ -305,7 +298,7 @@ def compute_impulseest(
 
     # Right hand side of the equation (b)
     UT_y = torch.bmm(U_T, output_batch.unsqueeze(-1))
-    RHS = torch.bmm(matrix_kernel_batch, UT_y)
+    RHS = torch.bmm(K, UT_y)
 
     # 4. Solve the linear system
     g_hat = torch.linalg.solve(LHS, RHS).squeeze(-1)
@@ -322,7 +315,7 @@ def compute_impulseest_df_and_sure(
     u: torch.Tensor,
     y: torch.Tensor,
     noise_var_batch: torch.Tensor,
-    matrix_kernel_batch: torch.Tensor,
+    K: torch.Tensor,
     g_length: int,
 ):
     """
@@ -334,14 +327,12 @@ def compute_impulseest_df_and_sure(
     dtype = y.dtype
 
     # 1. Build the Toeplitz matrix U
-    u_padded = torch.nn.functional.pad(u, (g_length - 1, 0))
-    U = u_padded.unfold(dimension=1, size=g_length, step=1)
-    U = torch.flip(U, dims=[2])
+    U = build_matrix_U_batched(u, g_length)
     U_T = U.transpose(1, 2)
 
     # 2. Build K * U^T * U
     UT_U = torch.bmm(U_T, U)
-    K_UT_U = torch.bmm(matrix_kernel_batch, UT_U)
+    K_UT_U = torch.bmm(K, UT_U)
 
     # 3. Add noise variance: K * U^T * U + sigma^2 * I
     I = torch.eye(g_length, dtype=dtype, device=device).unsqueeze(0).expand(B, -1, -1)
@@ -350,13 +341,15 @@ def compute_impulseest_df_and_sure(
 
     # 4. Compute projection matrix H = U * (K * U^T * U + sigma^2 * I)^(-1) * K * U^T
     # First, solve LHS * X = K * U^T  --> X will be (K * U^T * U + sigma^2 * I)^(-1) * K * U^T
-    K_UT = torch.bmm(matrix_kernel_batch, U_T)
+    K_UT = torch.bmm(K, U_T)
     X = torch.linalg.solve(LHS, K_UT)
+
+    # TODO
 
     H = torch.bmm(U, X)  # Shape: (B, n, n)
 
     # 5. The exact degrees of freedom are the trace of the projection matrix H
-    df_estimate = torch.diagonal(H, dim1=-2, dim2=-1).sum(-1)
+    df_estimate = torch.linalg.trace(H)
 
     # 6. Compute y_hat = H * y and SURE
     y_hat = torch.bmm(H, y.unsqueeze(-1)).squeeze(-1)

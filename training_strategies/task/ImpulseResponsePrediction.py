@@ -3,6 +3,7 @@ from collections.abc import Callable
 import torch
 
 from models.ScaleInvariantLoss import ScaleInvariantLoss
+from utils.Estimators import build_matrix_U_batched
 
 
 class ImpulseResponsePrediction:
@@ -31,9 +32,7 @@ class ImpulseResponsePrediction:
 
         g_length = info["g_length"][0].item()
 
-        u_padded = torch.nn.functional.pad(u, (g_length - 1, 0))
-        U = u_padded.unfold(dimension=1, size=g_length, step=1)
-        U = torch.flip(U, dims=[2])
+        U = build_matrix_U_batched(u, g_length)
         y_hat = torch.bmm(U, g_hat.unsqueeze(-1)).squeeze(-1)
 
         return y_hat
