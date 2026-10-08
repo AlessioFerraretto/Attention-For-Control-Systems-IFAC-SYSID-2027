@@ -13,7 +13,7 @@ from utils.StableSplineGenerator import generate_stable_spline
 
 
 class DynamicImpulseResponsePrediction(Dataset):
-    def __init__(self, cfg, batch_size, alpha_min, alpha_max, c_min, c_max):
+    def __init__(self, cfg, batch_size):
         """Generates a static dataset of synthetic linear systems."""
         self.batch_size = batch_size  # TODO: Find a more elegant way
         self.batches_per_epoch = cfg.dataset.batches_per_epoch
@@ -22,10 +22,10 @@ class DynamicImpulseResponsePrediction(Dataset):
         self.n = cfg.dataset.n
         self.n_past = cfg.dataset.n_past
         self.n_future = cfg.dataset.n_future
-        self.c_min = c_min
-        self.c_max = c_max
-        self.alpha_min = alpha_min
-        self.alpha_max = alpha_max
+        self.c_min = cfg.dataset.c_min
+        self.c_max = cfg.dataset.c_max
+        self.alpha_min = cfg.dataset.alpha_min
+        self.alpha_max = cfg.dataset.alpha_max
         self.eta_min = cfg.dataset.eta_min
         self.eta_max = cfg.dataset.eta_max
         self.snr_min = cfg.dataset.snr_min

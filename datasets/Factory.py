@@ -14,6 +14,7 @@ from torch.utils.data import DataLoader
 from datasets.DynamicFuturePredictionV1 import DynamicFuturePredictionV1
 from datasets.DynamicFuturePredictionV2 import DynamicFuturePredictionV2
 from datasets.DynamicFuturePredictionV3 import DynamicFuturePredictionV3
+from datasets.DynamicImpulseResponsePrediction import DynamicImpulseResponsePrediction
 from datasets.FixedFuturePredictionV1 import FixedFuturePredictionV1
 from datasets.FixedFuturePredictionV2 import FixedFuturePredictionV2
 from datasets.ImpulseResponsePrediction import ImpulseResponsePrediction
@@ -132,6 +133,19 @@ def get_data_loaders(cfg) -> tuple[DataLoader, DataLoader, DataLoader]:
         )
         test_dataset = DynamicFuturePredictionV3(
             cfg=cfg, batch_size=cfg.test_batch_size, alpha=fixed_alpha, c=fixed_c
+        )
+    elif cfg.dataset.name == "dynamic-impulse-response-prediction":
+        train_dataset = DynamicImpulseResponsePrediction(
+            cfg=cfg,
+            batch_size=cfg.training_batch_size,
+        )
+        validation_dataset = DynamicImpulseResponsePrediction(
+            cfg=cfg,
+            batch_size=cfg.validation_batch_size,
+        )
+        test_dataset = DynamicImpulseResponsePrediction(
+            cfg=cfg,
+            batch_size=cfg.test_batch_size,
         )
     elif cfg.dataset.name == "impulse-response-prediction":
         train_dataset = ImpulseResponsePrediction(
