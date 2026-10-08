@@ -20,13 +20,13 @@ for v1, v2, v3 in combinations:
     # 2. Load the base config fresh for each iteration
     # Ensure you have a 'base_config.yaml' file in your directory
     config = OmegaConf.load(
-        "configs/experiment/kernel-parameters-estimation-input-uy-output-alpha-c.yaml"
+        "configs/experiment/dynamic-impulse-response-prediction.yaml"
     )
 
     # 3. Override the specific variables
-    config.running_mode = "training"
-    config.model_mode = "new"
-    config.model_path = None
+    config.running_mode = "inference"
+    config.model_mode = "load"
+    config.model_path = "/home/ferraretto/Desktop/Attention For Control Systems/saved_models/model_VAR_1_VAR_2_VAR_3.pt"
 
     config.transformer_seed = 1
     config.data_seed = 1
@@ -54,8 +54,8 @@ for v1, v2, v3 in combinations:
 
     config.dataset.c_min = 0.0001
     config.dataset.c_max = 1.0
-    config.dataset.alpha_min = 0.70
-    config.dataset.alpha_max = 0.95
+    config.dataset.alpha_min = 0.97
+    config.dataset.alpha_max = 0.97
 
     config.dataset.eta_min = 0.1
     config.dataset.eta_max = 0.9
@@ -69,7 +69,7 @@ for v1, v2, v3 in combinations:
     config.dataset.a_param = 0.9
 
     # 4. Format the filename
-    filename = f"{config.dataset.name}-{v1}-{v2}-{v3}.yaml"
+    filename = f"{config.dataset.name}-alpha097-{v1}-{v2}-{v3}.yaml"
     filepath = os.path.join(output_dir, filename)
 
     # 5. Save the new configuration
