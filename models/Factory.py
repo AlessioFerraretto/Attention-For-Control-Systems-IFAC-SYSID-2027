@@ -10,6 +10,7 @@ from models.embeddings.TransformerPositionalEncoding import (
     TransformerPositionalEncoding,
 )
 from models.NNComposition import NNComposition
+from models.output_layers.MeanPooledClassifier import MeanPooledClassifier
 from models.output_layers.MLPClassifier import MLPClassifier
 from models.output_layers.MLPClassifierForFuturePredictionV1 import (
     MLPClassifierForFuturePredictionV1,
@@ -199,6 +200,11 @@ def _get_output_module(cfg, device: torch.device) -> nn.Module:
         )
     elif cfg.model.out_layer == "token-wise-readout":
         return TokenWiseReadout(
+            cfg=cfg,
+            device=device,
+        )
+    elif cfg.model.out_layer == "mean-pooled-classifier":
+        return MeanPooledClassifier(
             cfg=cfg,
             device=device,
         )

@@ -3,13 +3,13 @@
 transformer_seed: 1
 data_seed: 1
 
-epochs: 1
+epochs: 50
 learning_rate: 1e-3
-eval_every: 1
+eval_every: 50
 
 training_batch_size: 64
 validation_batch_size: 64
-test_batch_size: 64
+test_batch_size: 1
 
 save_model: True
 save_checkpoints: True
@@ -20,27 +20,30 @@ model:
   model_name: transformer # Name of the layer used
   embedding: transformer-positional-encoding # Embedding type
   layer_name: transformer-encoder-layer # Name of the layer used
-  out_layer: token-wise-readout # Output layer type
-  num_layers: 2
+  out_layer: mean-pooled-classifier # Output layer type
+  num_layers: 4
 
   # Layer parameters
   input_dim: 2
   model_dim: 64
-  num_heads: 8
+  num_heads: 16
   output_dim: ${model.model_dim}
   activation_function: gelu
   dropout: 0.1
 
   # Only for out_layer = "mlp-classifier" or out_layer = "token-wise-readout"
-  input_dim_classifier: "${model.output_dim}" # Input dimension of the classifier = output_dim
-  hidden_dim_classifier: "${model.output_dim}" # Hidden dimension of the classifier = output_dim
-  output_dim_classifier: 2 # Output dimension of the classifier = 2
-  out_bias1_classifier: True # Biases of classifier hidden layer and out layer
-  out_bias2_classifier: True # Biases of classifier hidden layer and out layer
+  # input_dim_classifier: "${model.output_dim}" # Input dimension of the classifier = output_dim
+  # hidden_dim_classifier: "${model.output_dim}" # Hidden dimension of the classifier = output_dim
+  # output_dim_classifier: 2 # Output dimension of the classifier = 2
+  # out_bias1_classifier: True # Biases of classifier hidden layer and out layer
+  # out_bias2_classifier: True # Biases of classifier hidden layer and out layer
 
   # Only for out_layer = mean-pooled-classifier
-  # head_bias: True # Biases of the head layer
-  # eps: 1e-6 # Epsilon for numerical stability in the head layer
+  input_dim_classifier: ${model.output_dim} # Input dimension of the classifier = output_dim
+  hidden_dim_classifier: "${div: ${model.output_dim}, 2}" # Hidden dimension of the classifier = output_dim / 2
+  output_dim_classifier: 2 # Output dimension of the classifier = 2
+  head_bias: True # Biases of the head layer
+  eps: 1e-6 # Epsilon for numerical stability in the head layer
 
   out_dir_name: "transformer"
 
@@ -75,7 +78,7 @@ dataset:
   out_dir_name: "kernel-parameters-estimation-input-uy-output-alpha-c"
 
 wandb:
-  enable: True
+  enable: False
   project: AttentionForControlSystems
   entity: alessioferraretto-unipd
   dataset: kernel-parameters-estimation-input-uy-output-alpha-c

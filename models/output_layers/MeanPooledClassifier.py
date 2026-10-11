@@ -19,18 +19,31 @@ from monitor.TrackableModule import TrackableModule
 class MeanPooledClassifier(TrackableModule):
     def __init__(
         self,
-        output_dim: int,
-        d_model: int,
-        head_bias: bool,
-        eps: float,
+        cfg,
         device: torch.device,
     ):
         super().__init__()
 
         # Normalization layer
-        self.rmsnorm = RMSNorm(d_model, device=device, eps=eps)
+        self.rmsnorm = RMSNorm(
+            cfg.model.input_dim_classifier, device=device, eps=cfg.model.eps
+        )
         # Linear classification head
-        self.head = nn.Linear(d_model, output_dim, head_bias, device=device)
+        self.head = nn.Sequential(
+            nn.Linear(
+                cfg.model.input_dim_classifier,
+                cfg.model.hidden_dim_classifier,
+                cfg.model.head_bias,
+                device=device,
+            ),
+            nn.ReLU(),
+            nn.Linear(
+                cfg.model.hidden_dim_classifier,
+                cfg.model.output_dim_classifier,
+                bias=cfg.model.head_bias,
+                device=device,
+            ),
+        )
 
     def forward(self, u):
         """
@@ -43,15 +56,18 @@ class MeanPooledClassifier(TrackableModule):
             logits: [B, output_dim]
         """
         # Normalize
+        # [B, L, D]
         u = self.rmsnorm(u)
 
-        # Mean pooling over sequence dimension
-        u = torch.mean(u, 1)
+        # Mean pooling over sequence dimension L
+        # [B, L, D] -> [B, D]
+        u = torch.mean(u, dim=1)
 
-        # Regression logits
+        # Regression logits through the 2-layer head
+        # [B, D] -> [B, D/2] -> [B, output_dim]
         logits = self.head(u)
 
-        # Predicted values
-        predictions = logits  # TODO: Check if this is correct
+        # Predicted values for alpha and c
+        predictions = logits
 
         return predictions, logits

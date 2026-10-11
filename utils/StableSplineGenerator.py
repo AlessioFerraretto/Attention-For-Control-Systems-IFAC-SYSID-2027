@@ -163,7 +163,7 @@ def simulate_io_data(g, n, snr_min, snr_max, filter_type, a_param):
 
     y = y0 + e
 
-    return u, y, snr
+    return u, y, snr, noise_variance
 
 
 def generate_stable_spline(
@@ -196,7 +196,9 @@ def generate_stable_spline(
     )
 
     # 2. Simulate a single trajectory of length n
-    u, y, snr = simulate_io_data(g, n, snr_min, snr_max, filter_type, a_param)
+    u, y, snr, noise_variance = simulate_io_data(
+        g, n, snr_min, snr_max, filter_type, a_param
+    )
 
     # 3. Split the sequences into past and future
     u_past = u[:n_past]
@@ -211,5 +213,6 @@ def generate_stable_spline(
         "y_future": y_future,
         "g": g,
         "snr": snr,
+        "noise_variance": noise_variance,
         **system_params,
     }

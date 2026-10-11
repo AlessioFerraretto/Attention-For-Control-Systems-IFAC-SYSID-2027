@@ -72,6 +72,7 @@ class KernelParametersPredictionInputUYOutputAlphaC(Dataset):
         y_future = sample["y_future"]
         g = sample["g"]
         snr = sample["snr"]
+        noise_variance = sample["noise_variance"]
 
         u = torch.cat([u_past, u_future], dim=0)
         y = torch.cat([y_past, y_future], dim=0)
@@ -89,10 +90,6 @@ class KernelParametersPredictionInputUYOutputAlphaC(Dataset):
             [alpha if self.kernel_type == "stable_spline" else eta, c],
             dtype=torch.float,
         )
-
-        # Build the info for the evaluation of the estimators
-        var_y = torch.var(y, unbiased=False)
-        noise_variance = var_y / (snr + 1.0)
 
         K = KERNELS[self.kernel_type](self.g_length, alpha=alpha, eta=eta, c=c)
 
