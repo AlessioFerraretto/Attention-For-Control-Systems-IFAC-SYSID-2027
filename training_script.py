@@ -138,6 +138,18 @@ def main(cfg: DictConfig):
                 wandb_logger=wandb_logger,
             )
 
+        case "inference_with_acc_loss":
+            model_acc, model_loss = load_best_models(cfg, device, base_dir)
+
+            evaluate_test_set(
+                test_loader=test_loader,
+                device=device,
+                models={ModelCriteria.ACC: model_acc, ModelCriteria.LOSS: model_loss},
+                cfg=cfg,
+                base_dir=base_dir,
+                wandb_logger=wandb_logger,
+            )
+
         case "diagnostic":
             diagnostic(
                 model=model,
@@ -447,6 +459,8 @@ def evaluate_test_set(
             targets = targets.to(device)
             masks = rest[0].to(device) if rest else None
 
+            alpha = info["alpha"].to(device)
+            c = info["c"].to(device)
             u_batch = info["u"].to(device)
             y_batch = info["y"].to(device)
             true_g = info["g"].to(device)
@@ -523,6 +537,10 @@ def evaluate_test_set(
 
             # --- STORE RESULTS ---
             results_manager.update(
+                true_alpha=alpha,
+                true_c=c,
+                ls_best_order=best_order,
+                noise_variance=noise_var_batch,
                 true_impulse_response=true_g,
                 ls_estimate=ls_estimate,
                 mmse_estimate=mmse_estimate,
@@ -530,7 +548,6 @@ def evaluate_test_set(
                 model_best_accuracy_estimate=preds_dict.get(ModelCriteria.ACC),
                 model_best_loss_estimate=preds_dict.get(ModelCriteria.LOSS),
                 model_inference_estimate=preds_dict.get(ModelCriteria.INF),
-                best_order=best_order,
             )
 
     # COMPUTE AVERAGES

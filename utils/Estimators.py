@@ -173,7 +173,7 @@ def compute_hutchinson_df_and_sure(
 
     # 3. Hutchinson Trace Estimation
     df_estimate = torch.zeros(B, device=y.device)
-    for _ in range(M):
+    for _ in range(M):  # TOFIX RANDOM
         z = (torch.randint(0, 2, size=y_hat.shape, device=y.device).float() * 2) - 1.0
 
         vjp = torch.autograd.grad(
