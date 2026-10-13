@@ -60,6 +60,15 @@ class SeedManager:
         """Sample normal values from the private dataset PyTorch generator."""
         return torch.randn(*size, generator=self._dataset_torch_generator, **kwargs)
 
+    def dataset_randint(self, *args, **kwargs) -> torch.Tensor:
+        """Sample integers using the private dataset PyTorch generator."""
+        device = kwargs.pop("device", None)
+        tensor = torch.randint(*args, generator=self._dataset_torch_generator, **kwargs)
+        if device is not None:
+            tensor = tensor.to(device)
+
+        return tensor
+
     def dataset_numpy_randn(self, *size) -> np.ndarray:
         """Sample normal values from the private dataset NumPy generator."""
         return self._dataset_numpy_generator.standard_normal(size)
