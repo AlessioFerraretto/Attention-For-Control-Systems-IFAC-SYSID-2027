@@ -59,7 +59,7 @@ if __name__ == "__main__":
     #    r"/mnt/c/Users/Alessio/Desktop/saved_models/architettura mean-pooling/kernel-parameters-estimation-input-uy-output-alpha-c/"
     # )
     BASE_DIR = Path(
-        "/mnt/c/Users/Alessio/Desktop/Workspace/Attention For Control Systems/outputs/kernel-parameters-estimation-input-uy-output-alpha-c/transformer/"
+        "/mnt/c/Users/Alessio/Desktop/saved_models/architettura mean-pooling/kernel-parameters-estimation-input-uy-output-alpha-c"
     )
 
     OUTPUT_DIR = Path(r"/mnt/c/Users/Alessio/Desktop/saved_models/output")
@@ -69,7 +69,6 @@ if __name__ == "__main__":
 
     # Cartelle da cercare all'interno di ogni progetto
     folders_to_check = [
-        "DATA",
         "4x64x16",
         "4x64x32",
         "4x128x16",

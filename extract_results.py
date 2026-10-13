@@ -5,7 +5,7 @@ import pandas as pd
 from openpyxl import load_workbook
 
 # Specifica qui il percorso della cartella principale
-base_dir = r"/mnt/c/Users/Alessio/Desktop/saved_models/dynamic-impulse-response-prediction-alpha095/"
+base_dir = r"/mnt/c/Users/Alessio/Desktop/saved_models/architettura mean-pooling/kernel-parameters-estimation-input-uy-output-alpha-c"
 
 data = []
 baselines_estratti = set()  # Set per tenere traccia delle baseline già salvate

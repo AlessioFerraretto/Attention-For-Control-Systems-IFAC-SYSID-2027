@@ -69,9 +69,8 @@ def main(cfg: DictConfig):
         None: Orchestrates training and testing workflow and persists artifacts.
     """
 
-    seed_manager = SeedManager()
-    seed_manager.seed_dataset(cfg.data_seed)
-    seed_manager.seed_transformer(cfg.transformer_seed)
+    SeedManager().seed_dataset(cfg.data_seed)
+    SeedManager().seed_transformer(cfg.transformer_seed)
 
     wandb_logger = WandDBLogger(cfg)
 
@@ -541,6 +540,8 @@ def evaluate_test_set(
                 true_c=c,
                 ls_best_order=best_order,
                 noise_variance=noise_var_batch,
+                u=u_batch,
+                y=y_batch,
                 true_impulse_response=true_g,
                 ls_estimate=ls_estimate,
                 mmse_estimate=mmse_estimate,
