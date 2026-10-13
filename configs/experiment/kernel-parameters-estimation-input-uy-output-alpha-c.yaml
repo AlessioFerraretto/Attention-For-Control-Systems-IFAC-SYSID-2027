@@ -3,9 +3,9 @@
 transformer_seed: 1
 data_seed: 1
 
-epochs: 50
+epochs: 2
 learning_rate: 1e-3
-eval_every: 50
+eval_every: 1
 
 training_batch_size: 64
 validation_batch_size: 64
@@ -43,7 +43,7 @@ model:
   hidden_dim_classifier: "${div: ${model.output_dim}, 2}" # Hidden dimension of the classifier = output_dim / 2
   output_dim_classifier: 2 # Output dimension of the classifier = 2
   head_bias: True # Biases of the head layer
-  eps: 1e-6 # Epsilon for numerical stability in the head layer
+  eps: 1e-8 # Epsilon for numerical stability in the head layer
 
   out_dir_name: "transformer"
 
@@ -54,7 +54,7 @@ dataset:
   shuffle: False # The sequences are already generated randomly
   kernel: "stable_spline" # "stable_spline" or "gaussian"
 
-  batches_per_epoch: 1000
+  batches_per_epoch: 100
 
   g_length: 64
   n: 100

@@ -20,14 +20,12 @@ class ResidualBlock(TrackableModule):
         Root mean square normalization layer.
     """
 
-    def __init__(
-        self, d_model: int, mamba_block: nn.Module, eps: float, device: torch.device
-    ):
+    def __init__(self, d_model: int, mamba_block: nn.Module, device: torch.device):
         super().__init__()
         self.d_model = d_model
         self.mamba_block = mamba_block
 
-        self.rmsnorm = RMSNorm(d_model, eps=eps, device=device)
+        self.rmsnorm = RMSNorm(d_model, device=device)
 
     def forward(self, u):
         """Apply normalization, Mamba block, and residual connection.

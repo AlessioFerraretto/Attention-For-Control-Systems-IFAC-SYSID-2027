@@ -25,8 +25,9 @@ import torch
 from hydra.core.hydra_config import HydraConfig
 from omegaconf import DictConfig, OmegaConf
 from torch import nn
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Subset
 
+import utils.Globals as globals_module
 from datasets.Factory import get_data_loaders
 from evaluate import evaluate_model
 from models.Factory import construct_model
@@ -68,6 +69,7 @@ def main(cfg: DictConfig):
     Returns:
         None: Orchestrates training and testing workflow and persists artifacts.
     """
+    globals_module.setup_globals(cfg, log)
 
     SeedManager().seed_dataset(cfg.data_seed)
     SeedManager().seed_transformer(cfg.transformer_seed)
@@ -302,13 +304,15 @@ def training(
         if epoch % cfg.eval_every == 0:
             log.info(f"Running model evaluation at epoch {epoch}...")
             try:
+                samples = 3
+
                 evaluate_model(
                     model=model,
                     cfg=cfg,
-                    dataset=val_loader.dataset,
+                    dataset=Subset(val_loader.dataset, list(range(samples))),
                     device=device,
                     save_path=base_dir / "images" / f"epoch_{epoch}.png",
-                    num_test_samples=3,
+                    num_test_samples=samples,
                 )
             except Exception as e:
                 log.error(f"Evaluation failed: {e}")

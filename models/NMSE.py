@@ -3,13 +3,14 @@
 import torch
 from torch import nn
 
+from utils.Globals import EPS
+
 
 class NMSE(nn.Module):
     """Computes the NMSE: ||y - y_hat||^2 / (||y||^2 + eps)."""
 
-    def __init__(self, eps: float = 1e-8):
+    def __init__(self):
         super().__init__()
-        self.eps = eps
 
     def forward(self, preds: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
         # Sum the squared differences along the sequence dimension
@@ -20,4 +21,4 @@ class NMSE(nn.Module):
 
         # Divide the error by the energy of the target for each sample in the batch,
         # then return the mean across the batch.
-        return torch.mean(squared_error / (target_energy + self.eps))
+        return torch.mean(squared_error / (target_energy + EPS))

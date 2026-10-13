@@ -4,6 +4,7 @@ import torch
 
 from models.MSE import MSE
 from utils.Estimators import build_matrix_U_batched
+from utils.Globals import EPS
 
 
 class ImpulseResponsePrediction:
@@ -22,7 +23,7 @@ class ImpulseResponsePrediction:
         targets = targets.float()
         norm_diff = torch.linalg.vector_norm(targets - predictions, dim=-1)
         norm_true = torch.linalg.vector_norm(targets, dim=-1)
-        fit_per_sample = 100.0 * (1.0 - (norm_diff / (norm_true + 1e-8)))
+        fit_per_sample = 100.0 * (1.0 - (norm_diff / (norm_true + EPS)))
         return {"fit": torch.mean(fit_per_sample).item()}
 
     def compute_y_hat(self, predictions, info, u, y_with_grad):

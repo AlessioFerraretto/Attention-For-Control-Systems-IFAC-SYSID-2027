@@ -2,6 +2,7 @@ import logging
 
 import torch
 
+from utils.Globals import EPS
 from utils.SeedManager import SeedManager
 
 log = logging.getLogger("script")
@@ -70,7 +71,7 @@ def compute_ls(
             true_impulse_batch - padded_estimate, dim=-1
         )
         norm_true_response = torch.linalg.vector_norm(true_impulse_batch, dim=-1)
-        fit_metric = 100.0 * (1.0 - (norm_difference / (norm_true_response + 1e-8)))
+        fit_metric = 100.0 * (1.0 - (norm_difference / (norm_true_response + EPS)))
 
         is_better = fit_metric > best_fit
         best_fit = torch.where(is_better, fit_metric, best_fit)
@@ -133,7 +134,7 @@ def compute_mmse(
         true_impulse_batch - estimated_impulse, dim=-1
     )
     norm_true_response = torch.linalg.vector_norm(true_impulse_batch, dim=-1)
-    fit_metric = 100.0 * (1.0 - (norm_difference / (norm_true_response + 1e-8)))
+    fit_metric = 100.0 * (1.0 - (norm_difference / (norm_true_response + EPS)))
 
     return estimated_impulse, fit_metric
 
@@ -311,7 +312,7 @@ def compute_impulseest(
     # 5. Calculate FIT
     norm_difference = torch.linalg.vector_norm(true_impulse_batch - g_hat, dim=-1)
     norm_true_response = torch.linalg.vector_norm(true_impulse_batch, dim=-1)
-    fit_metric = 100.0 * (1.0 - (norm_difference / (norm_true_response + 1e-8)))
+    fit_metric = 100.0 * (1.0 - (norm_difference / (norm_true_response + EPS)))
 
     return g_hat, fit_metric
 

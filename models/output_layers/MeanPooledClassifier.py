@@ -25,9 +25,7 @@ class MeanPooledClassifier(TrackableModule):
         super().__init__()
 
         # Normalization layer
-        self.rmsnorm = RMSNorm(
-            cfg.model.input_dim_classifier, device=device, eps=cfg.model.eps
-        )
+        self.rmsnorm = RMSNorm(cfg.model.input_dim_classifier, device=device)
         # Linear classification head
         self.head = nn.Sequential(
             nn.Linear(
