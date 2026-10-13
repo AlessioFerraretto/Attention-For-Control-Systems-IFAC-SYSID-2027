@@ -4,8 +4,8 @@ import torch
 from torch import nn
 
 
-class ScaleInvariantLoss(nn.Module):
-    """Computes the Scale Invariant Loss: ||y - y_hat||^2 / (||y||^2 + eps)."""
+class NMSE(nn.Module):
+    """Computes the NMSE: ||y - y_hat||^2 / (||y||^2 + eps)."""
 
     def __init__(self, eps: float = 1e-8):
         super().__init__()

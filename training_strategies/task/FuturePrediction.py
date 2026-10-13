@@ -2,7 +2,7 @@ from collections.abc import Callable
 
 import torch
 
-from models.ScaleInvariantLoss import ScaleInvariantLoss
+from models.MSE import MSE
 
 
 class FuturePrediction:
@@ -10,7 +10,7 @@ class FuturePrediction:
         self.requires_y_in_input = True
 
     def loss_fn(self) -> Callable:
-        return ScaleInvariantLoss()
+        return MSE()
 
     def compute_metrics(self, predictions, targets, info=None):
         """

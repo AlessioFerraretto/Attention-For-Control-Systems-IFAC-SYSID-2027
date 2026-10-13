@@ -2,7 +2,7 @@ from collections.abc import Callable
 
 import torch
 
-from models.ScaleInvariantLoss import ScaleInvariantLoss
+from models.NMSE import NMSE
 from utils.Estimators import build_matrix_U_batched, compute_mmse
 from utils.StableSplineGenerator import BATCHED_KERNELS
 
@@ -10,10 +10,10 @@ from utils.StableSplineGenerator import BATCHED_KERNELS
 class KernelParametersEstimationOutputC:
     def __init__(self, cfg):
         self.requires_y_in_input = False
-        self.kernel_type = cfg.dataset.kernel
+        self.kernel = cfg.dataset.kernel
 
     def loss_fn(self) -> Callable:
-        return ScaleInvariantLoss()
+        return NMSE()
 
     def _prepare_kernel_and_data(self, predictions, info):
         if predictions.dim() == 3:
@@ -23,9 +23,9 @@ class KernelParametersEstimationOutputC:
         alpha = None
         eta = None
 
-        if self.kernel_type == "stable_spline":
+        if self.kernel == "stable_spline":
             alpha = info["alpha"].to(predictions.device)
-        elif self.kernel_type == "gaussian":
+        elif self.kernel == "gaussian":
             eta = info["eta"].to(predictions.device)
 
         c = predictions[:, 0]
@@ -37,7 +37,7 @@ class KernelParametersEstimationOutputC:
         g_length = int(info["g_length"][0].item())
 
         # Generate K_hat using the batched methods
-        K_hat = BATCHED_KERNELS[self.kernel_type](g_length, alpha=alpha, eta=eta, c=c)
+        K_hat = BATCHED_KERNELS[self.kernel](g_length, alpha=alpha, eta=eta, c=c)
 
         return K_hat, u_batch, y_batch, true_g, noise_var_batch, g_length
 
