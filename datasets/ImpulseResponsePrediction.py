@@ -8,6 +8,7 @@ The generator output is of the form [[u],[y]] -> [g].
 import torch
 from torch.utils.data import Dataset
 
+from utils.DatasetUtils import generate_info
 from utils.StableSplineGenerator import generate_stable_spline
 
 
@@ -32,6 +33,7 @@ class ImpulseResponsePrediction(Dataset):
         self.input_dim = cfg.model.input_dim
         self.filter_type = cfg.dataset.filter_type
         self.a_param = cfg.dataset.a_param
+        self.padding_length = cfg.dataset.padding_length
 
     def __len__(self):
         return self.batches_per_epoch * self.batch_size
@@ -62,7 +64,7 @@ class ImpulseResponsePrediction(Dataset):
         y = torch.cat([y_past, y_future], dim=0)
 
         padding_tensor = torch.full(
-            size=(self.g_length, 2),
+            size=(self.padding_length, 2),
             fill_value=self.padding,
             dtype=torch.float,
         )
@@ -77,32 +79,9 @@ class ImpulseResponsePrediction(Dataset):
         mask = torch.cat(
             [
                 torch.zeros(u.shape[0], dtype=torch.bool),
-                torch.ones(self.g_length, dtype=torch.bool),
+                torch.ones(self.padding_length, dtype=torch.bool),
             ],
             dim=0,
         )
 
-        # Build the info for the evaluation of the estimators
-
-        # 1. Exact reconstruction of the noise variance.
-        # Given that y = y_0 + e, and SNR = Var(y_0) / Var(e),
-        # we can derive: Var(e) = Var(y) / (SNR + 1.0)
-        snr = sample["snr"]
-        var_y = torch.var(y, unbiased=False)
-        noise_variance = var_y / (snr + 1.0)
-
-        # 2. Reconstruction of the TC Kernel Matrix
-        # K(k,j) = c * alpha^max(k,j)
-        k_idx = torch.arange(1, self.g_length + 1)
-        max_indices = torch.maximum(k_idx[:, None], k_idx)
-        kernel_matrix = self.c * (self.alpha**max_indices)
-
-        info = {
-            "u": u,
-            "y": y,
-            "noise_variance": noise_variance,
-            "kernel_matrix": kernel_matrix,
-            "g_length": self.g_length,
-        }
-
-        return input, target, info, mask
+        return input, target, generate_info(sample), mask

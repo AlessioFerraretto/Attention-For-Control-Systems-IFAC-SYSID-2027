@@ -68,7 +68,6 @@ dataset:
   snr_max: 10
   jitter_regularization_parameter: 0.00001
 
-  padding: 0
   filter_type: "type_1" # "white": white noise or "type_1": 1 / (z - a) or "type_2": (1 - a) (z - a)
   a_param: 0.9
 

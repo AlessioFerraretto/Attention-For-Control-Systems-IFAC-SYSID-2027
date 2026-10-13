@@ -207,6 +207,10 @@ def generate_stable_spline(
     y_future = y[n_past:]
 
     return {
+        "alpha": alpha,
+        "eta": eta,
+        "c": c,
+        "g_length": g_length,
         "u_past": u_past,
         "y_past": y_past,
         "u_future": u_future,
@@ -214,5 +218,6 @@ def generate_stable_spline(
         "g": g,
         "snr": snr,
         "noise_variance": noise_variance,
+        "kernel": kernel,
         **system_params,
     }

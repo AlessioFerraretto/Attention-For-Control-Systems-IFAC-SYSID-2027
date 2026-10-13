@@ -3,9 +3,9 @@
 transformer_seed: 1
 data_seed: 1
 
-epochs: 50
+epochs: 1
 learning_rate: 1e-3
-eval_every: 50
+eval_every: 1
 
 training_batch_size: 64
 validation_batch_size: 64
@@ -26,7 +26,7 @@ model:
   # Layer parameters
   input_dim: 2
   model_dim: 64
-  num_heads: 16
+  num_heads: 32
   output_dim: ${model.model_dim}
   activation_function: gelu
   dropout: 0.1
@@ -54,7 +54,7 @@ dataset:
   shuffle: False # The sequences are already generated randomly
   kernel: "stable_spline" # "stable_spline" or "gaussian"
 
-  batches_per_epoch: 1000
+  batches_per_epoch: 100
 
   g_length: 64
   n: 100
@@ -71,7 +71,6 @@ dataset:
   snr_max: 10
   jitter_regularization_parameter: 0.00001
 
-  padding: 0
   filter_type: "type_1" # "white": white noise or "type_1": 1 / (z - a) or "type_2": (1 - a) (z - a)
   a_param: 0.9
 

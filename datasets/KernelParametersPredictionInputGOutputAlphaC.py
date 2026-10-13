@@ -1,6 +1,7 @@
 import torch
 from torch.utils.data import Dataset
 
+from utils.DatasetUtils import generate_info
 from utils.SeedManager import SeedManager
 from utils.StableSplineGenerator import (
     generate_stable_spline,
@@ -28,7 +29,6 @@ class KernelParametersPredictionInputGOutputAlphaC(Dataset):
         self.jitter_regularization_parameter = (
             cfg.dataset.jitter_regularization_parameter
         )
-        self.padding = cfg.dataset.padding
         self.input_dim = cfg.model.input_dim
         self.filter_type = cfg.dataset.filter_type
         self.a_param = cfg.dataset.a_param
@@ -62,49 +62,11 @@ class KernelParametersPredictionInputGOutputAlphaC(Dataset):
             self.a_param,
         )
 
-        # Splitting
-        u_past = sample["u_past"]
-        y_past = sample["y_past"]
-        u_future = sample["u_future"]
-        y_future = sample["y_future"]
         g = sample["g"]
 
-        u = torch.cat([u_past, u_future], dim=0)
-        y = torch.cat([y_past, y_future], dim=0)
-
-        padding_tensor = torch.full(
-            size=(2,),
-            fill_value=self.padding,
-            dtype=torch.float,
-        )
-
-        input = torch.cat([g, padding_tensor])
+        input = g
         input = input.unsqueeze(-1)
 
         target = torch.tensor([alpha, c], dtype=torch.float)
 
-        # Build the info for the evaluation of the estimators
-
-        # 1. Exact reconstruction of the noise variance.
-        # Given that y = y_0 + e, and SNR = Var(y_0) / Var(e),
-        # we can derive: Var(e) = Var(y) / (SNR + 1.0)
-        snr = sample["snr"]
-        var_y = torch.var(y, unbiased=False)
-        noise_variance = var_y / (snr + 1.0)
-
-        # 2. Reconstruction of the TC Kernel Matrix
-        # K(k,j) = c * alpha^max(k,j)
-        k_idx = torch.arange(1, self.g_length + 1)
-        max_indices = torch.maximum(k_idx[:, None], k_idx)
-        kernel_matrix = c * (alpha**max_indices)
-
-        info = {
-            "u": u,
-            "y": y,
-            "g": g,
-            "noise_variance": noise_variance,
-            "kernel_matrix": kernel_matrix,
-            "g_length": self.g_length,
-        }
-
-        return input, target, info
+        return input, target, generate_info(sample)
