@@ -39,7 +39,7 @@ class TokenWiseReadout(TrackableModule):
         self.output_dim = cfg.model.output_dim_classifier
         self.out_bias1 = cfg.model.out_bias1_classifier
         self.out_bias2 = cfg.model.out_bias2_classifier
-        self.g_length = cfg.dataset.g_length
+        self.padding_length = cfg.dataset.padding_length
 
         # The final layer projects to 1 because each token predicts a single
         # point of the impulse response.
@@ -65,9 +65,9 @@ class TokenWiseReadout(TrackableModule):
             (batch, g_length).
         """
 
-        # 1. Isolate the final g_length tokens
-        # Shape: (batch, g_length, input_dim)
-        u_sliced = u[:, -self.g_length :, :]
+        # 1. Isolate the final padding_length tokens
+        # Shape: (batch, padding_length, input_dim)
+        u_sliced = u[:, -self.padding_length :, :]  # TODO FIX
 
         # 2. Apply the neural network. PyTorch maps Linear over the last dimension.
         # Each token is processed in parallel by the exact same weights.
@@ -75,7 +75,7 @@ class TokenWiseReadout(TrackableModule):
         output = self.classifier(u_sliced)
 
         # 3. Remove the last dummy dimension to obtain scalar logits
-        # Shape: (batch, g_length)
+        # Shape: (batch, padding_length)
         predictions = output.squeeze(-1) if self.output_dim == 1 else output
 
         return predictions, predictions
