@@ -20,7 +20,7 @@ def generate_info(sample):
     noise_variance = sample["noise_variance"]
 
     u = torch.cat([u_past, u_future], dim=0)
-    y = torch.cat([u_past, u_future], dim=0)
+    y = torch.cat([y_past, y_future], dim=0)
 
     K = KERNELS[kernel](g_length, alpha=alpha, eta=eta, c=c)
 

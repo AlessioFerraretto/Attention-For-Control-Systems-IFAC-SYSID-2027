@@ -3,9 +3,9 @@
 transformer_seed: 1
 data_seed: 1
 
-epochs: 2
+epochs: 50
 learning_rate: 1e-3
-eval_every: 1
+eval_every: 50
 
 training_batch_size: 64
 validation_batch_size: 64
@@ -51,7 +51,7 @@ dataset:
   shuffle: False # The sequences are already generated randomly
   kernel: "gaussian" # "stable_spline" or "gaussian"
 
-  batches_per_epoch: 100
+  batches_per_epoch: 1000
 
   g_length: 64
   n: 100
