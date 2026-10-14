@@ -40,7 +40,7 @@ model:
 
   # Only for out_layer = mean-pooled-classifier
   # head_bias: True # Biases of the head layer
-  # eps: 1e-8 # Epsilon for numerical stability in the head layer
+  eps: 1e-8 # Epsilon for numerical stability in the head layer
 
   out_dir_name: "transformer"
 
