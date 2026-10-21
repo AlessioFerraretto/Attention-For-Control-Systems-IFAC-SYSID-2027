@@ -46,7 +46,7 @@ model:
 
 dataset:
   name: kernel-parameters-estimation-input-uy-alpha-output-c
-  description: stable spline kernel generator of the type [ [u, y], alpha, padding] -> [c]
+  description: stable spline kernel generator of the type [ [u, y], alpha] -> [c]
 
   shuffle: False # The sequences are already generated randomly
   kernel: "stable_spline" # "stable_spline" or "gaussian"
