@@ -56,6 +56,7 @@ log = logging.getLogger("script")
 OmegaConf.register_new_resolver(name="slurm_job_id", resolver=get_job_id)
 OmegaConf.register_new_resolver("mul", lambda x, y: int(x * y))
 OmegaConf.register_new_resolver("div", lambda x, y: int(x / y))
+OmegaConf.register_new_resolver("add", lambda x, y: int(x + y))
 
 
 @hydra.main(version_base=None, config_path="configs", config_name="config")
@@ -162,6 +163,13 @@ def main(cfg: DictConfig):
             )
 
 
+def _reset_loader_seed(loader: DataLoader, seed: int):
+    """Helper method to reset the SeedManager and the DataLoader's generator seed."""
+    SeedManager().seed_dataset(seed)
+    if loader.generator is not None and seed is not None:
+        loader.generator.manual_seed(seed)
+
+
 def training(
     model: nn.Module,
     cfg: DictConfig,
@@ -245,9 +253,7 @@ def training(
         log.info(f"Epoch {epoch: 3d} / {cfg.epochs}")
 
         # Reset the seed at the start of each epoch to get the same dataset
-        SeedManager().seed_dataset(cfg.data_seed)
-        if train_loader.generator is not None:
-            train_loader.generator.manual_seed(cfg.data_seed)
+        _reset_loader_seed(train_loader, cfg.data_seed)
 
         model.train(True)
         cumulative_loss = 0.0
@@ -293,6 +299,7 @@ def training(
         log.info(f"Training Average Loss: {(cumulative_loss / len(train_loader)):.5f}")
 
         # ------------------------VALIDATION PHASE-----------------------------------------
+        _reset_loader_seed(val_loader, cfg.val_seed)
 
         val_loss, fit = _evaluate(
             model,
@@ -306,6 +313,8 @@ def training(
         log.info(f"Validation Loss: {val_loss:.5f}, FIT: {fit:.3f}")
 
         # ------------------------VISUALIZATION PHASE-----------------------------------
+        # TODO: Seed the visualization
+
         if epoch % cfg.eval_every == 0:
             log.info(f"Running model evaluation at epoch {epoch}...")
             try:
@@ -360,10 +369,15 @@ def diagnostic(
     test_loader: DataLoader,
     device: torch.device,
 ):
+
     # 1. Setup strategy and loss function for evaluation
     strategy = make_strategy(cfg)
     strategy.setup_for_eval(model)
     loss_function = strategy.loss_fn()
+
+    _reset_loader_seed(train_loader, cfg.data_seed)
+    _reset_loader_seed(val_loader, cfg.val_seed)
+    _reset_loader_seed(test_loader, cfg.test_seed)
 
     # 2. Evaluate on Training Set
     log.info("Evaluating on Training Set...")
@@ -437,6 +451,9 @@ def evaluate_test_set(
     and statistics (mean, median, std) for FIT, DF, and SURE.
     """
     log.info("Starting unified test set evaluation (Models + Baselines + SURE)...")
+
+    _reset_loader_seed(test_loader, cfg.test_seed)
+
     results_manager = TestResultsManager(base_dir)
 
     # Set up the strategy using the first available model
