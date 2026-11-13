@@ -4,8 +4,8 @@ import os
 from omegaconf import OmegaConf
 
 # 1. Define the parameter grids
-VAR_1 = [4, 8]  # num_layers
-VAR_2 = [64, 128]  # model_dim
+VAR_1 = [2, 4, 6, 8]  # num_layers
+VAR_2 = [64, 128, 256]  # model_dim
 VAR_3 = [16, 32]  # num_heads
 
 output_dir = "configs/experiment/bulk/"
@@ -20,19 +20,22 @@ for v1, v2, v3 in combinations:
     # 2. Load the base config fresh for each iteration
     # Ensure you have a 'base_config.yaml' file in your directory
     config = OmegaConf.load(
-        "configs/experiment/kernel-parameters-estimation-input-uy-output-alpha-c.yaml"
+        "configs/experiment/dynamic-impulse-response-prediction.yaml"
     )
 
     # 3. Override the specific variables
     config.running_mode = "training"
+    config.model_mode = "new"
     # config.model_mode = "load"
     # config.model_path = f"/home/ferraretto/Desktop/Attention For Control Systems/saved_models/model_{v1}_{v2}_{v3}.pt"
 
     config.transformer_seed = 1
     config.data_seed = 1
+    config.val_seed = 2
+    config.test_seed = 3
 
-    config.epochs = 50
-    config.eval_every = 50
+    config.epochs = 1000
+    config.eval_every = 1000
     config.learning_rate = 1e-3
 
     config.training_batch_size = 64
@@ -49,8 +52,9 @@ for v1, v2, v3 in combinations:
 
     # Set all dataset defaults
     config.dataset.kernel = "stable_spline"
-    config.dataset.batches_per_epoch = 1000
+    config.dataset.batches_per_epoch = 100
     config.dataset.g_length = 64
+    config.dataset.n = 100
 
     config.dataset.c_min = 0.0001
     config.dataset.c_max = 1.0

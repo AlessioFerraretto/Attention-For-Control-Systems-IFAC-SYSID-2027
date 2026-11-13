@@ -47,12 +47,12 @@ class MeanPooledClassifier(TrackableModule):
         """
         Parameters
             u: Input [B, L, D]
-            embedding: Unused (kept for interface consistency)
 
         Returns:
             predictions: [B]
             logits: [B, output_dim]
         """
+
         # Normalize
         # [B, L, D]
         u = self.rmsnorm(u)
