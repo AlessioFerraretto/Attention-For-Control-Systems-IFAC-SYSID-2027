@@ -257,8 +257,6 @@ def training(
 
         model.train(True)
         cumulative_loss = 0.0
-        cumulative_fit = 0.0
-        total_train_samples = 0
         for i, (inputs, targets, info, *rest) in enumerate(train_loader, start=1):
             masks = rest[0].to(device) if rest else None
             inputs, targets = (
@@ -280,15 +278,6 @@ def training(
                 model, cfg, global_step
             )
 
-            # Compute training FIT for the current batch
-
-            batch_size = inputs.size(0)
-            with torch.no_grad():
-                train_metrics = strategy.compute_metrics(output, targets, info)
-                batch_fit = torch.as_tensor(train_metrics["fit"]).mean().item()
-                cumulative_fit += batch_fit * batch_size
-                total_train_samples += batch_size
-
             loss.backward()
 
             # Apply gradient clipping if the strategy defines it.
@@ -302,21 +291,12 @@ def training(
             if not (i - 1) % cfg.debug_every:
                 wandb_dict, string_to_print = strategy.logging_metrics(model)
                 log.info(
-                    f"i: {i: 6d} | Loss: {loss.item():.6f} | FIT: {batch_fit:.3f}"
+                    f"i: {i: 6d} | Loss: {loss.item():.6f}"
                 )  # TODO: Check if it is correct: I removed "+ string_top_print"
                 wandb_logger.log({"loss": loss.item()})
                 wandb_logger.log(wandb_dict)
 
-        # Compute the final epoch averages
-        epoch_train_loss = cumulative_loss / len(train_loader)
-        epoch_train_fit = cumulative_fit / max(total_train_samples, 1)
-
-        log.info(
-            f"Training Average Loss: {epoch_train_loss:.5f}, FIT: {epoch_train_fit:.3f}"
-        )
-        wandb_logger.log({"epoch_train_fit": epoch_train_fit, "epoch": epoch})
-
-        continue
+        log.info(f"Training Average Loss: {(cumulative_loss / len(train_loader)):.5f}")
 
         # ------------------------VALIDATION PHASE-----------------------------------------
         _reset_loader_seed(val_loader, cfg.val_seed)

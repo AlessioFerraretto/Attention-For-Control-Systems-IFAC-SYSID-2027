@@ -5,13 +5,13 @@ data_seed: 1
 val_seed: "${add: ${data_seed}, 1 }"
 test_seed: "${add: ${data_seed}, 2 }"
 
-epochs: 1500
+epochs: 50
 learning_rate: 1e-3
-eval_every: 1500
+eval_every: 50
 
 training_batch_size: 64
-validation_batch_size: 1
-test_batch_size: 1
+validation_batch_size: 64
+test_batch_size: 64
 
 save_model: True
 save_checkpoints: True
@@ -33,16 +33,15 @@ model:
   activation_function: gelu
   dropout: 0.1
 
-  # Out Layer Parameters
+  # Only for out_layer = mlp-classifier or out_layer = token-wise-readout
   input_dim_classifier: "${model.output_dim}" # Input dimension of the classifier = output_dim
-  hidden_dim_classifier: "${div: ${model.output_dim}, 1}" # Hidden dimension of the classifier = output_dim / 2
-  output_dim_classifier: 1 # Output dimension of the classifier = g_length
+  hidden_dim_classifier: "${model.output_dim}" # Hidden dimension of the classifier = output_dim
+  output_dim_classifier: 1 # Output dimension of the classifier = 1
   out_bias1_classifier: True # Biases of classifier hidden layer and out layer
   out_bias2_classifier: True # Biases of classifier hidden layer and out layer
 
   # Only for out_layer = mean-pooled-classifier
-  head_bias: True # Biases of the head layer
-
+  # head_bias: True # Biases of the head layer
   eps: 1e-8 # Epsilon for numerical stability in the head layer
 
   out_dir_name: "transformer"
@@ -54,9 +53,7 @@ dataset:
   shuffle: False # The sequences are already generated randomly
   kernel: "gaussian" # "stable_spline" or "gaussian"
 
-  training_batches_per_epoch: 100
-  validation_batches_per_epoch: 1000
-  test_batches_per_epoch: 1000
+  batches_per_epoch: 1000
 
   g_length: 64
   n: 100
