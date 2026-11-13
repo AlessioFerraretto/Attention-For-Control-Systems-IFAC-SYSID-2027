@@ -9,7 +9,7 @@ import torch
 from torch.utils.data import Dataset
 
 from utils.StableSplineGenerator import (
-    sample_system_impulse_response,
+    sample_stable_spline_impulse_response,
     simulate_io_data,
 )
 
@@ -31,11 +31,13 @@ class FixedFuturePredictionV2(Dataset):
         )
         self.padding = cfg.dataset.padding
         self.input_dim = cfg.model.input_dim
+        self.filter_type = cfg.dataset.filter_type
+        self.a_param = cfg.dataset.a_param
         self.low_pass_cutoff = cfg.dataset.low_pass_cutoff
         self.low_pass_cutoff_order = cfg.dataset.low_pass_cutoff_order
 
         # Fixes (g) using the given system (alpha, c)
-        self.fixed_g, self.system_params = sample_system_impulse_response(
+        self.fixed_g, self.system_params = sample_stable_spline_impulse_response(
             self.g_length,
             self.c,
             self.alpha,
@@ -47,13 +49,13 @@ class FixedFuturePredictionV2(Dataset):
 
     def __getitem__(self, idx):
         # Dynamically generate u and y using the fixed system
-        u, y, snr_db = simulate_io_data(
+        u, y, snr = simulate_io_data(
             self.fixed_g,
             self.n,
             self.snr_min,
             self.snr_max,
-            self.low_pass_cutoff,
-            self.low_pass_cutoff_order,
+            self.filter_type,
+            self.a_param,
         )
 
         padding_tensor = torch.full(

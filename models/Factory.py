@@ -10,6 +10,7 @@ from models.embeddings.TransformerPositionalEncoding import (
     TransformerPositionalEncoding,
 )
 from models.NNComposition import NNComposition
+from models.output_layers.MeanPooledClassifier import MeanPooledClassifier
 from models.output_layers.MLPClassifier import MLPClassifier
 from models.output_layers.MLPClassifierForFuturePredictionV1 import (
     MLPClassifierForFuturePredictionV1,
@@ -37,6 +38,9 @@ from models.output_layers.MLPClassifierForKernelParametersPredictionV4 import (
 )
 from models.output_layers.MLPClassifierForKernelParametersPredictionV5 import (
     MLPClassifierForKernelParametersPredictionV5,
+)
+from models.output_layers.TokenWiseReadout import (
+    TokenWiseReadout,
 )
 from models.TransformerEncoderLayer import TransformerEncoderLayer
 from models.TransformerFinalLayer import TransformerFinalLayer
@@ -169,28 +173,38 @@ def _get_output_module(cfg, device: torch.device) -> nn.Module:
             cfg=cfg,
             device=device,
         )
-    elif cfg.model.out_layer == "mlp-classifier-for-kernel-parameters-prediction":
+    elif cfg.model.out_layer == "mlp-classifier-for-kernel-parameters-estimation":
         return MLPClassifierForKernelParametersPrediction(
             cfg=cfg,
             device=device,
         )
-    elif cfg.model.out_layer == "mlp-classifier-for-kernel-parameters-prediction-v2":
+    elif cfg.model.out_layer == "mlp-classifier-for-kernel-parameters-estimation-v2":
         return MLPClassifierForKernelParametersPredictionV2(
             cfg=cfg,
             device=device,
         )
-    elif cfg.model.out_layer == "mlp-classifier-for-kernel-parameters-prediction-v3":
+    elif cfg.model.out_layer == "mlp-classifier-for-kernel-parameters-estimation-v3":
         return MLPClassifierForKernelParametersPredictionV3(
             cfg=cfg,
             device=device,
         )
-    elif cfg.model.out_layer == "mlp-classifier-for-kernel-parameters-prediction-v4":
+    elif cfg.model.out_layer == "mlp-classifier-for-kernel-parameters-estimation-v4":
         return MLPClassifierForKernelParametersPredictionV4(
             cfg=cfg,
             device=device,
         )
-    elif cfg.model.out_layer == "mlp-classifier-for-kernel-parameters-prediction-v5":
+    elif cfg.model.out_layer == "mlp-classifier-for-kernel-parameters-estimation-v5":
         return MLPClassifierForKernelParametersPredictionV5(
+            cfg=cfg,
+            device=device,
+        )
+    elif cfg.model.out_layer == "token-wise-readout":
+        return TokenWiseReadout(
+            cfg=cfg,
+            device=device,
+        )
+    elif cfg.model.out_layer == "mean-pooled-classifier":
+        return MeanPooledClassifier(
             cfg=cfg,
             device=device,
         )

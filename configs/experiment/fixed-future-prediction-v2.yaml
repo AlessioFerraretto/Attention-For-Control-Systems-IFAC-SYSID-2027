@@ -1,6 +1,7 @@
 # @package _global_
 
-seed: null
+transformer_seed: null
+data_seed: null
 
 epochs: 5
 learning_rate: 1e-3
@@ -38,13 +39,13 @@ model:
 
   # Only for out_layer = mean-pooled-classifier
   head_bias: True # Biases of the head layer
-  eps: 1e-6 # Epsilon for numerical stability in the head layer
+  eps: 1e-8 # Epsilon for numerical stability in the head layer
 
   out_dir_name: "transformer"
 
 dataset:
   name: fixed-future-prediction-v2
-  description: stable spline kernel generator of the type [u, padding]
+  description: stable spline kernel generator of the type [u, padding] -> [y]
 
   shuffle: False # The sequences are already generated randomly
 

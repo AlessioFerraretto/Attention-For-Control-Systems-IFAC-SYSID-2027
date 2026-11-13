@@ -1,120 +1,82 @@
 import itertools
 import os
 
-# Template configuration
-TEMPLATE = """
-# @package _global_
+from omegaconf import OmegaConf
 
-seed: null
+# 1. Define the parameter grids
+VAR_1 = [4, 8]  # num_layers
+VAR_2 = [64, 128]  # model_dim
+VAR_3 = [16, 32]  # num_heads
 
-epochs: 50
-learning_rate: 1e-3
-eval_every: 1
-
-training_batch_size: 256
-validation_batch_size: 256
-test_batch_size: 256
-
-save_model: False
-
-model:
-  description: a transformer architecture
-
-  model_name: transformer # Name of the layer used
-  embedding: transformer-positional-encoding # Embedding type
-  layer_name: transformer-encoder-layer # Name of the layer used
-  out_layer: mlp-classifier-for-impulse-response-prediction # Output layer type
-  num_layers: VAR_1
-
-  # Layer parameters
-  input_dim: 2
-  model_dim: VAR_2
-  num_heads: VAR_3
-  output_dim: ${model.model_dim}
-  activation_function: gelu
-  dropout: 0.1
-
-  # Only for out_layer = mlp-classifier
-  input_dim_classifier: "${mul: ${dataset.g_length}, ${model.output_dim} }" # Input dimension of the classifier = g_length * output_dim
-  hidden_dim_classifier: "${div: ${model.input_dim_classifier}, 2 }" # Hidden dimension of the classifier = input_dim_classifier/2
-  output_dim_classifier: ${dataset.g_length} # Output dimension of the classifier = g_length
-  out_bias1_classifier: True # Biases of classifier hidden layer and out layer
-  out_bias2_classifier: True # Biases of classifier hidden layer and out layer
-
-  # Only for out_layer = mean-pooled-classifier
-  head_bias: True # Biases of the head layer
-  eps: 1e-6 # Epsilon for numerical stability in the head layer
-
-  out_dir_name: "transformer"
-
-dataset:
-  name: impulse-response-prediction
-  description: stable spline kernel generator of the type [u, padding] -> [g]
-
-  shuffle: False # The sequences are already generated randomly
-
-  batches_per_epoch: 1000
-
-  g_length: 64
-  n: 100
-  n_past: 0
-  n_future: "${dataset.n}"
-  c_min: 0.0001
-  c_max: 1.0
-  alpha_min: 0.7
-  alpha_max: 0.95
-  snr_min: 100
-  snr_max: 100
-  jitter_regularization_parameter: 0.00001
-
-  padding: 0
-  low_pass_cutoff: 0.5
-  low_pass_cutoff_order: 4
-
-  out_dir_name: "impulse-response-prediction"
-
-wandb:
-  enable: False
-  project: AttentionForControlSystems
-  entity: alessioferraretto-unipd
-  dataset: impulse-response-prediction
-  model_name: "transformer"
-
-"""
-
-
-# Define the parameter grids
-VAR_1 = [4, 8, 32]
-VAR_2 = [64, 128, 256]
-VAR_3 = [16, 32]
-
-# Create an output directory so we don't clutter the root folder
 output_dir = "configs/experiment/bulk/"
-
 os.makedirs(output_dir, exist_ok=True)
 
-# Generate all possible combinations using itertools.product
 combinations = list(itertools.product(VAR_1, VAR_2, VAR_3))
-
 print(f"Generating {len(combinations)} configuration files...")
+input("Press Enter to continue or Ctrl+C to abort...")
 
-count = 0
-
-# Iterate over each combination, replace variables, and save
+# Iterate over each combination
 for v1, v2, v3 in combinations:
-    # 1. Replace the placeholders in the template with the current values
-    config_content = (
-        TEMPLATE.replace("VAR_1", str(v1))
-        .replace("VAR_2", str(v2))
-        .replace("VAR_3", str(v3))
+    # 2. Load the base config fresh for each iteration
+    # Ensure you have a 'base_config.yaml' file in your directory
+    config = OmegaConf.load(
+        "configs/experiment/kernel-parameters-estimation-input-uy-output-alpha-c.yaml"
     )
-    count += 1
-    # 2. Format the filename according to your required style
-    filename = f"impulse-response-prediction-{v1}-{v2}-{v3}.yaml"
+
+    # 3. Override the specific variables
+    config.running_mode = "training"
+    # config.model_mode = "load"
+    # config.model_path = f"/home/ferraretto/Desktop/Attention For Control Systems/saved_models/model_{v1}_{v2}_{v3}.pt"
+
+    config.transformer_seed = 1
+    config.data_seed = 1
+
+    config.epochs = 50
+    config.eval_every = 50
+    config.learning_rate = 1e-3
+
+    config.training_batch_size = 64
+    config.validation_batch_size = 64
+    config.test_batch_size = 1
+
+    config.save_model = True
+    config.save_checkpoints = False
+    config.wandb.enable = False
+
+    config.model.num_layers = v1
+    config.model.model_dim = v2
+    config.model.num_heads = v3
+
+    # Set all dataset defaults
+    config.dataset.kernel = "stable_spline"
+    config.dataset.batches_per_epoch = 1000
+    config.dataset.g_length = 64
+
+    config.dataset.c_min = 0.0001
+    config.dataset.c_max = 1.0
+    config.dataset.alpha_min = 0.70
+    config.dataset.alpha_max = 0.95
+
+    config.dataset.eta_min = 0.1
+    config.dataset.eta_max = 0.9
+
+    config.dataset.snr_min = 3
+    config.dataset.snr_max = 10
+
+    config.dataset.jitter_regularization_parameter = 0.00001
+
+    config.dataset.filter_type = "type_1"
+    config.dataset.a_param = 0.9
+
+    # 4. Format the filename
+    filename = f"{config.dataset.name}-{v1}-{v2}-{v3}.yaml"
     filepath = os.path.join(output_dir, filename)
 
-    # 3. Write the new configuration to the file
+    # 5. Save the new configuration
     with open(filepath, "w") as f:
-        f.write(config_content)
+        # OmegaConf strips comments when loading/saving.
+        # We manually re-inject the Hydra global directive at the top.
+        f.write("# @package _global_\n\n")
+        OmegaConf.save(config, f)
 
 print(f"Done! All files have been saved to the '{output_dir}' directory.")

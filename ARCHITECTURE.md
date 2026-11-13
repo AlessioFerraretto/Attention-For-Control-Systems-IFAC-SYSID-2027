@@ -30,16 +30,50 @@ TODO
 
 ## 2. High-Level Workflow
 
-The main entry point is `training_script.py`, which uses Hydra to load configuration from `configs/config.yaml` and experiment-specific YAML file.
+## 2. High-Level Workflow
+
+The main entry point is `training_script.py`, which uses Hydra to load configuration from `configs/config.yaml` and experiment-specific YAML files.
+
 The workflow is as follows:
 
-1. The training entrypoint `training_script.py` loads Hydra configuration and sets up the runtime environment.
-2. TODO
-3. TODO
-4. The training loop consumes batches, computes loss, and updates weights.
-5. Validation uses held-out data to compute loss and exact-match metrics.
-6. Checkpoints and best models are saved to Hydra-managed output locations.
-7. Optional logging to Weights & Biases is performed if enabled in the configuration.
+1. **Environment Setup:** The entry point loads the Hydra configuration, seeds the random number generators for reproducibility (via `SeedManager`), initializes the Weights & Biases logger (`WandDBLogger`), determines the optimal hardware device (`get_torch_device`), and builds the PyTorch DataLoaders for the training, validation, and test splits.
+2. **Model Initialization (`model_mode`):** The script checks the `model_mode` parameter to determine how the model weights are initialized:
+   - **`new`:** Initializes a fresh model from scratch based on the defined architecture and strategy.
+   - **`load`:** Initializes the model and loads pre-trained weights from the exact file path specified by the `model_path` parameter via the `CheckpointManager`.
+3. **Execution Mode Selection (`running_mode`):** The script dictates the execution flow based on the `running_mode` parameter:
+   - **`training`:** Executes the full training loop.
+     - _Resuming:_ If a valid `resume_checkpoint` path is provided in the config, it restores the optimizer state, starting epoch, RNG states, and previous best metrics before resuming the loop.
+     - _Validation & Checkpointing:_ After each epoch, the model is evaluated on the validation set. The `CheckpointManager` monitors metrics and saves standard checkpoints, alongside distinct "best" models based on both the highest validation accuracy and the lowest validation loss. Early stopping triggers if the target FIT metric is reached.
+     - _Testing:_ Once training concludes, it automatically loads the "best" models and runs the testing and baseline evaluation phase.
+   - **`inference`:** Skips training entirely. It evaluates the current model directly on the test dataset. (Typically used in conjunction with `model_mode=load`).
+   - **`diagnostic`:** Executes a diagnostic evaluation across the Training, Validation, and Test sets sequentially. It computes the FIT for each split to verify whether the model is exhibiting "benign interpolation" (memorizing the finite training sample) or acting as a population Bayes estimator.
+4. **Testing and Baseline Evaluation:** During `training` or `inference` modes, the script concludes by running the `test()` function. It evaluates the model against the test dataset, computes baseline statistical estimates (Least Squares and MMSE baselines), and logs the final comparative metrics via WandB before exiting. Optionally, it cleans up the saved models if `save_model` is set to false.
+
+**Execution Examples:**
+
+**Standard Training (Fresh Model):**
+
+```bash
+python -m training_script running_mode=training model_mode=new experiment=dynamic-impulse-response-prediction
+```
+
+**Resume Interrupted Training:**
+
+```bash
+python -m training_script running_mode=training model_mode=new resume_checkpoint="outputs/checkpoints/model.pt" experiment=dynamic-impulse-response-prediction
+```
+
+**Inference-Only (Evaluate a Pre-trained Model):**
+
+```bash
+python -m training_script running_mode=inference model_mode=load model_path="'/path/to/best_model.pt'" experiment=dynamic-impulse-response-prediction
+```
+
+**Diagnostic Evaluation (Train/Val/Test FIT checks):**
+
+```bash
+python -m training_script running_mode=diagnostic model_mode=load model_path="'saved_models/best_model.pt'" experiment=dynamic-impulse-response-prediction-snr3-10-4-64-16
+```
 
 ## 3. Configuration and Experiment Management
 

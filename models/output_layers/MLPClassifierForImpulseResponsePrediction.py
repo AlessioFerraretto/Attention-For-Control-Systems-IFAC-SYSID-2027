@@ -67,7 +67,6 @@ class MLPClassifierForImpulseResponsePrediction(TrackableModule):
         # 3. Get the continuous output values
         logits = self.classifier(u_flattened)
 
-        # Add the last dimension to match the required shape [batch, g_length, 1]
         predictions = logits
 
         return predictions, logits

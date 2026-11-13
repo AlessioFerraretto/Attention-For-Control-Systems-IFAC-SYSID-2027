@@ -14,14 +14,29 @@ from torch.utils.data import DataLoader
 from datasets.DynamicFuturePredictionV1 import DynamicFuturePredictionV1
 from datasets.DynamicFuturePredictionV2 import DynamicFuturePredictionV2
 from datasets.DynamicFuturePredictionV3 import DynamicFuturePredictionV3
+from datasets.DynamicImpulseResponsePrediction import DynamicImpulseResponsePrediction
 from datasets.FixedFuturePredictionV1 import FixedFuturePredictionV1
 from datasets.FixedFuturePredictionV2 import FixedFuturePredictionV2
 from datasets.ImpulseResponsePrediction import ImpulseResponsePrediction
-from datasets.KernelParametersPrediction import KernelParametersPrediction
-from datasets.KernelParametersPredictionV2 import KernelParametersPredictionV2
-from datasets.KernelParametersPredictionV3 import KernelParametersPredictionV3
-from datasets.KernelParametersPredictionV4 import KernelParametersPredictionV4
-from datasets.KernelParametersPredictionV5 import KernelParametersPredictionV5
+from datasets.KernelParametersPredictionInputGAlphaOutputC import (
+    KernelParametersPredictionInputGAlphaOutputC,
+)
+from datasets.KernelParametersPredictionInputGCOutputAlpha import (
+    KernelParametersPredictionInputGCOutputAlpha,
+)
+from datasets.KernelParametersPredictionInputGOutputAlphaC import (
+    KernelParametersPredictionInputGOutputAlphaC,
+)
+from datasets.KernelParametersPredictionInputUYAlphaOutputC import (
+    KernelParametersPredictionInputUYAlphaOutputC,
+)
+from datasets.KernelParametersPredictionInputUYCOutputAlpha import (
+    KernelParametersPredictionInputUYCOutputAlpha,
+)
+from datasets.KernelParametersPredictionInputUYOutputAlphaC import (
+    KernelParametersPredictionInputUYOutputAlphaC,
+)
+from utils.SeedManager import SeedManager, seed_data_worker
 
 logger = logging.getLogger(__name__)
 
@@ -48,12 +63,26 @@ def get_data_loaders(cfg) -> tuple[DataLoader, DataLoader, DataLoader]:
 
     logger.info(f"Retrieving '{cfg.dataset.name}'")
 
-    fixed_alpha = (cfg.dataset.alpha_max - cfg.dataset.alpha_min) * torch.rand(
-        1
-    ).item() + cfg.dataset.alpha_min
-    fixed_c = (cfg.dataset.c_max - cfg.dataset.c_min) * torch.rand(
+    fixed_alpha = (
+        cfg.dataset.alpha_max - cfg.dataset.alpha_min
+    ) * SeedManager().dataset_rand(1).item() + cfg.dataset.alpha_min
+    fixed_c = (cfg.dataset.c_max - cfg.dataset.c_min) * SeedManager().dataset_rand(
         1
     ).item() + cfg.dataset.c_min
+
+    if cfg.data_seed is not None:
+        loader_generators = (
+            SeedManager().make_data_loader_generator(cfg.data_seed + offset)
+            for offset in (0, 1, 2)
+        )
+        train_generator, validation_generator, test_generator = loader_generators
+
+        loader_kwargs = {
+            "worker_init_fn": seed_data_worker,
+        }
+    else:
+        train_generator = validation_generator = test_generator = None
+        loader_kwargs = {}
 
     if cfg.dataset.name == "fixed-future-prediction-v1":
         train_dataset = FixedFuturePredictionV1(
@@ -105,6 +134,19 @@ def get_data_loaders(cfg) -> tuple[DataLoader, DataLoader, DataLoader]:
         test_dataset = DynamicFuturePredictionV3(
             cfg=cfg, batch_size=cfg.test_batch_size, alpha=fixed_alpha, c=fixed_c
         )
+    elif cfg.dataset.name == "dynamic-impulse-response-prediction":
+        train_dataset = DynamicImpulseResponsePrediction(
+            cfg=cfg,
+            batch_size=cfg.training_batch_size,
+        )
+        validation_dataset = DynamicImpulseResponsePrediction(
+            cfg=cfg,
+            batch_size=cfg.validation_batch_size,
+        )
+        test_dataset = DynamicImpulseResponsePrediction(
+            cfg=cfg,
+            batch_size=cfg.test_batch_size,
+        )
     elif cfg.dataset.name == "impulse-response-prediction":
         train_dataset = ImpulseResponsePrediction(
             cfg=cfg, batch_size=cfg.training_batch_size, alpha=fixed_alpha, c=fixed_c
@@ -115,68 +157,81 @@ def get_data_loaders(cfg) -> tuple[DataLoader, DataLoader, DataLoader]:
         test_dataset = ImpulseResponsePrediction(
             cfg=cfg, batch_size=cfg.test_batch_size, alpha=fixed_alpha, c=fixed_c
         )
-    elif cfg.dataset.name == "kernel-parameters-prediction":
-        train_dataset = KernelParametersPrediction(
+    elif cfg.dataset.name == "kernel-parameters-estimation-input-uy-output-alpha-c":
+        train_dataset = KernelParametersPredictionInputUYOutputAlphaC(
             cfg=cfg,
             batch_size=cfg.training_batch_size,
         )
-        validation_dataset = KernelParametersPrediction(
+        validation_dataset = KernelParametersPredictionInputUYOutputAlphaC(
             cfg=cfg,
             batch_size=cfg.validation_batch_size,
         )
-        test_dataset = KernelParametersPrediction(
+        test_dataset = KernelParametersPredictionInputUYOutputAlphaC(
             cfg=cfg,
             batch_size=cfg.test_batch_size,
         )
-    elif cfg.dataset.name == "kernel-parameters-prediction-v2":
-        train_dataset = KernelParametersPredictionV2(
+    elif cfg.dataset.name == "kernel-parameters-estimation-input-uy-alpha-output-c":
+        train_dataset = KernelParametersPredictionInputUYAlphaOutputC(
             cfg=cfg,
             batch_size=cfg.training_batch_size,
         )
-        validation_dataset = KernelParametersPredictionV2(
+        validation_dataset = KernelParametersPredictionInputUYAlphaOutputC(
             cfg=cfg,
             batch_size=cfg.validation_batch_size,
         )
-        test_dataset = KernelParametersPredictionV2(
+        test_dataset = KernelParametersPredictionInputUYAlphaOutputC(
             cfg=cfg,
             batch_size=cfg.test_batch_size,
         )
-    elif cfg.dataset.name == "kernel-parameters-prediction-v3":
-        train_dataset = KernelParametersPredictionV3(
+    elif cfg.dataset.name == "kernel-parameters-estimation-input-uy-c-output-alpha":
+        train_dataset = KernelParametersPredictionInputUYCOutputAlpha(
             cfg=cfg,
             batch_size=cfg.training_batch_size,
         )
-        validation_dataset = KernelParametersPredictionV3(
+        validation_dataset = KernelParametersPredictionInputUYCOutputAlpha(
             cfg=cfg,
             batch_size=cfg.validation_batch_size,
         )
-        test_dataset = KernelParametersPredictionV3(
+        test_dataset = KernelParametersPredictionInputUYCOutputAlpha(
             cfg=cfg,
             batch_size=cfg.test_batch_size,
         )
-    elif cfg.dataset.name == "kernel-parameters-prediction-v4":
-        train_dataset = KernelParametersPredictionV4(
+    elif cfg.dataset.name == "kernel-parameters-estimation-input-g-output-alpha-c":
+        train_dataset = KernelParametersPredictionInputGOutputAlphaC(
             cfg=cfg,
             batch_size=cfg.training_batch_size,
         )
-        validation_dataset = KernelParametersPredictionV4(
+        validation_dataset = KernelParametersPredictionInputGOutputAlphaC(
             cfg=cfg,
             batch_size=cfg.validation_batch_size,
         )
-        test_dataset = KernelParametersPredictionV4(
+        test_dataset = KernelParametersPredictionInputGOutputAlphaC(
             cfg=cfg,
             batch_size=cfg.test_batch_size,
         )
-    elif cfg.dataset.name == "kernel-parameters-prediction-v5":
-        train_dataset = KernelParametersPredictionV5(
+    elif cfg.dataset.name == "kernel-parameters-estimation-input-g-alpha-output-c":
+        train_dataset = KernelParametersPredictionInputGAlphaOutputC(
             cfg=cfg,
             batch_size=cfg.training_batch_size,
         )
-        validation_dataset = KernelParametersPredictionV5(
+        validation_dataset = KernelParametersPredictionInputGAlphaOutputC(
             cfg=cfg,
             batch_size=cfg.validation_batch_size,
         )
-        test_dataset = KernelParametersPredictionV5(
+        test_dataset = KernelParametersPredictionInputGAlphaOutputC(
+            cfg=cfg,
+            batch_size=cfg.test_batch_size,
+        )
+    elif cfg.dataset.name == "kernel-parameters-estimation-input-g-c-output-alpha":
+        train_dataset = KernelParametersPredictionInputGCOutputAlpha(
+            cfg=cfg,
+            batch_size=cfg.training_batch_size,
+        )
+        validation_dataset = KernelParametersPredictionInputGCOutputAlpha(
+            cfg=cfg,
+            batch_size=cfg.validation_batch_size,
+        )
+        test_dataset = KernelParametersPredictionInputGCOutputAlpha(
             cfg=cfg,
             batch_size=cfg.test_batch_size,
         )
@@ -185,7 +240,10 @@ def get_data_loaders(cfg) -> tuple[DataLoader, DataLoader, DataLoader]:
             f"Dataset '{cfg.dataset.name}' is not implemented yet."
         )
 
-    mp_context = torch.multiprocessing.get_context("spawn")
+    if cfg.num_workers > 0:
+        loader_kwargs["multiprocessing_context"] = torch.multiprocessing.get_context(
+            "spawn"
+        )
 
     # Initialize PyTorch DataLoaders for all splits
     train_loader = DataLoader(
@@ -194,7 +252,8 @@ def get_data_loaders(cfg) -> tuple[DataLoader, DataLoader, DataLoader]:
         num_workers=cfg.num_workers,
         shuffle=cfg.dataset.shuffle,
         pin_memory=False,
-        multiprocessing_context=mp_context,
+        generator=train_generator,
+        **loader_kwargs,
     )
     validation_loader = DataLoader(
         validation_dataset,
@@ -202,7 +261,8 @@ def get_data_loaders(cfg) -> tuple[DataLoader, DataLoader, DataLoader]:
         num_workers=cfg.num_workers,
         shuffle=cfg.dataset.shuffle,
         pin_memory=False,
-        multiprocessing_context=mp_context,
+        generator=validation_generator,
+        **loader_kwargs,
     )
     test_loader = DataLoader(
         test_dataset,
@@ -210,7 +270,8 @@ def get_data_loaders(cfg) -> tuple[DataLoader, DataLoader, DataLoader]:
         num_workers=cfg.num_workers,
         shuffle=cfg.dataset.shuffle,
         pin_memory=False,
-        multiprocessing_context=mp_context,
+        generator=test_generator,
+        **loader_kwargs,
     )
 
     return train_loader, validation_loader, test_loader

@@ -5,62 +5,147 @@ kernels and synthetic input-output datasets using a first-order stable spline
 (TC) prior.
 """
 
-import numpy as np
 import scipy.signal as signal
 import torch
 import torch.nn.functional as F
 
+from utils.SeedManager import SeedManager
 
-def generate_stable_spline_kernel(impulse_length, c, alpha):
+
+def generate_stable_spline_kernel(impulse_length, alpha, c, eta=None):
     """Generate a first-order stable spline covariance matrix using PyTorch."""
     idx = torch.arange(1, impulse_length + 1)
     max_indices = torch.maximum(idx[:, None], idx)
     return c * (alpha**max_indices)
 
 
-def sample_system_impulse_response(g_length, c, alpha, jitter_regularization_parameter):
+def sample_stable_spline_impulse_response(
+    g_length, c, alpha, eta, jitter_regularization_parameter
+):
     """Sample the stable spline hyperparameters and impulse response 'g'.
 
     Call this ONCE per system you want to identify (e.g., in Dataset __init__)
     to ensure the underlying physics of the system remain constant.
     """
-    K_eta = generate_stable_spline_kernel(g_length, c, alpha)
+    K_eta = generate_stable_spline_kernel(g_length, alpha, c)
     jitter = torch.eye(g_length) * jitter_regularization_parameter
 
-    mvn = torch.distributions.MultivariateNormal(
-        loc=torch.zeros(g_length), covariance_matrix=K_eta + jitter
-    )
-    g = mvn.sample()
+    g = SeedManager().dataset_multivariate_normal(K_eta + jitter)
 
     return g, {"c": c, "alpha": alpha}
 
 
-def simulate_io_data(g, n, snr_min, snr_max, low_pass_cutoff, low_pass_cutoff_order):
+def generate_gaussian_kernel(impulse_length, eta, c, alpha=None):
+    """Generate a Gaussian (RBF) covariance matrix using PyTorch.
+    Formula: K_{i,j} = c * exp(-eta * (i-j)^2)
+    """
+    idx = torch.arange(1, impulse_length + 1, dtype=torch.float)
+    dist_sq = (idx[:, None] - idx[None, :]) ** 2
+
+    return c * torch.exp(-eta * dist_sq)
+
+
+def sample_gaussian_impulse_response(
+    g_length, c, alpha, eta, jitter_regularization_parameter
+):
+    """Sample the Gaussian kernel hyperparameters and impulse response 'g'."""
+    K_eta = generate_gaussian_kernel(g_length, eta, c)
+    jitter = torch.eye(g_length) * jitter_regularization_parameter
+
+    g = SeedManager().dataset_multivariate_normal(K_eta + jitter)
+
+    return g, {"c": c, "eta": eta}
+
+
+def generate_stable_spline_kernel_batched(
+    g_length,
+    alpha,
+    c,
+    eta=None,
+):
+    """Batched generation of first-order stable spline covariance matrix."""
+    device = c.device
+    B = c.shape[0]
+    k_idx = torch.arange(1, g_length + 1, device=device)
+    max_indices = torch.maximum(k_idx[:, None], k_idx).float()
+
+    return c.view(B, 1, 1) * (alpha.view(B, 1, 1) ** max_indices.unsqueeze(0))
+
+
+def generate_gaussian_kernel_batched(g_length, eta, c, alpha=None):
+    """Batched generation of Gaussian (RBF) covariance matrix."""
+    device = c.device
+    B = c.shape[0]
+    idx = torch.arange(1, g_length + 1, dtype=torch.float, device=device)
+    dist_sq = (idx[:, None] - idx[None, :]) ** 2
+
+    return c.view(B, 1, 1) * torch.exp(-eta.view(B, 1, 1) * dist_sq.unsqueeze(0))
+
+
+BATCHED_KERNELS = {
+    "stable_spline": generate_stable_spline_kernel_batched,
+    "gaussian": generate_gaussian_kernel_batched,
+}
+
+KERNELS = {
+    "stable_spline": generate_stable_spline_kernel,
+    "gaussian": generate_gaussian_kernel,
+}
+
+IMPULSE_RESPONSES = {
+    "stable_spline": sample_stable_spline_impulse_response,
+    "gaussian": sample_gaussian_impulse_response,
+}
+
+
+def simulate_io_data(g, n, snr_min, snr_max, filter_type, a_param):
     """Simulate input 'u' and noisy output 'y' given a fixed impulse response 'g'.
 
-    Call this multiple times (e.g., in Dataset __getitem__) to generate
-    different dynamic responses for the same physical system.
+    Parameters:
+        g: torch.Tensor, the true impulse response.
+        n: int, sequence length.
+        snr_min: float, minimum SNR for noise generation.
+        snr_max: float, maximum SNR for noise generation.
+        a_param: float, pole location for the low-pass filter (e.g., 0.9).
+        filter_type: str, type of input generation. Options:
+            - "white": standard white noise.
+            - "ar1": unnormalized AR(1) low-pass filter H(z) = 1 / (z - a).
+            - "ar1_normalized": unit static gain AR(1) filter H(z) = (1 - a) / (z - a).
     """
     g_length = len(g)
 
-    # Generate input sequence u_t
-    if low_pass_cutoff is not None:
-        # Generate white noise with NumPy
-        u_white = np.random.randn(n)
+    # 1. Generate input sequence
+    match filter_type:
+        case "white":
+            u = SeedManager().dataset_randn(n)
 
-        # Design a Butterworth low-pass filter (order 4 is a good default)
-        # btype='low' specifies a low-pass filter
-        b, a = signal.butter(
-            N=low_pass_cutoff_order, Wn=low_pass_cutoff, btype="low", analog=False
-        )
+        case "type_1":
+            if a_param is None:
+                raise ValueError("a_param must be provided for the 'type_1' filter.")
 
-        # Apply filtfilt for zero-phase filtering (prevents phase shifting the input)
-        u_filtered = signal.filtfilt(b, a, u_white)
+            u_white = SeedManager().dataset_numpy_randn(n)
+            b_coeff = [0.0, 1.0]
+            a_coeff = [1.0, -a_param]
 
-        # Convert back to a PyTorch tensor
-        u = torch.tensor(u_filtered.copy(), dtype=torch.float)
-    else:
-        u = torch.randn(n)
+            u_filtered = signal.lfilter(b_coeff, a_coeff, u_white)
+            u = torch.tensor(u_filtered.copy(), dtype=torch.float)
+
+        case "type_2":
+            if a_param is None:
+                raise ValueError("a_param must be provided for the 'type_2' filter.")
+
+            u_white = SeedManager().dataset_numpy_randn(n)
+            b_coeff = [0.0, 1.0 - a_param]
+            a_coeff = [1.0, -a_param]
+
+            u_filtered = signal.lfilter(b_coeff, a_coeff, u_white)
+            u = torch.tensor(u_filtered.copy(), dtype=torch.float)
+
+        case _:
+            raise ValueError(
+                f"Unknown filter_type: '{filter_type}'. "
+                "Choose 'white', 'type_1', or 'type_2'."
+            )
 
     # Compute noise-free output y^0 using convolution
     u_reshaped = u.view(1, 1, n)
@@ -70,15 +155,15 @@ def simulate_io_data(g, n, snr_min, snr_max, low_pass_cutoff, low_pass_cutoff_or
     y0 = y0_full[0, 0, :n]
 
     # Add measurement noise e_t
-    snr_db = (snr_max - snr_min) * torch.rand(1).item() + snr_min
-    snr_linear = 10 ** (snr_db / 10)
+    # SNR is defined as the variance ratio: Var(y0) / Var(noise)
+    snr = (snr_max - snr_min) * SeedManager().dataset_rand(1).item() + snr_min
 
-    noise_variance = torch.var(y0, unbiased=False) / snr_linear
-    e = torch.randn(n) * torch.sqrt(noise_variance)
+    noise_variance = torch.var(y0, unbiased=False) / snr
+    e = SeedManager().dataset_randn(n) * torch.sqrt(noise_variance)
 
     y = y0 + e
 
-    return u, y, snr_db
+    return u, y, snr, noise_variance
 
 
 def generate_stable_spline(
@@ -87,11 +172,13 @@ def generate_stable_spline(
     n_future,
     c,
     alpha,
+    eta,
     snr_min,
     snr_max,
     jitter_regularization_parameter,
-    low_pass_cutoff,
-    low_pass_cutoff_order,
+    filter_type,
+    a_param,
+    kernel="stable_spline",
 ):
     """Generate a synthetic system identification problem.
 
@@ -100,13 +187,17 @@ def generate_stable_spline(
     n = n_past + n_future
 
     # 1. Sample the system physics
-    g, system_params = sample_system_impulse_response(
-        g_length, c, alpha, jitter_regularization_parameter
+    g, system_params = IMPULSE_RESPONSES[kernel](
+        g_length,
+        c,
+        alpha=alpha,
+        eta=eta,
+        jitter_regularization_parameter=jitter_regularization_parameter,
     )
 
     # 2. Simulate a single trajectory of length n
-    u, y, snr_db = simulate_io_data(
-        g, n, snr_min, snr_max, low_pass_cutoff, low_pass_cutoff_order
+    u, y, snr, noise_variance = simulate_io_data(
+        g, n, snr_min, snr_max, filter_type, a_param
     )
 
     # 3. Split the sequences into past and future
@@ -116,14 +207,17 @@ def generate_stable_spline(
     y_future = y[n_past:]
 
     return {
+        "alpha": alpha,
+        "eta": eta,
+        "c": c,
+        "g_length": g_length,
         "u_past": u_past,
         "y_past": y_past,
         "u_future": u_future,
         "y_future": y_future,
         "g": g,
-        "eta": {
-            "c": system_params["c"],
-            "alpha": system_params["alpha"],
-            "snr_db": snr_db,
-        },
+        "snr": snr,
+        "noise_variance": noise_variance,
+        "kernel": kernel,
+        **system_params,
     }

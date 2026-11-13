@@ -8,6 +8,7 @@ The generator output is of the form [[u],[y]] -> [g].
 import torch
 from torch.utils.data import Dataset
 
+from utils.DatasetUtils import generate_info
 from utils.StableSplineGenerator import generate_stable_spline
 
 
@@ -30,8 +31,9 @@ class ImpulseResponsePrediction(Dataset):
         )
         self.padding = cfg.dataset.padding
         self.input_dim = cfg.model.input_dim
-        self.low_pass_cutoff = cfg.dataset.low_pass_cutoff
-        self.low_pass_cutoff_order = cfg.dataset.low_pass_cutoff_order
+        self.filter_type = cfg.dataset.filter_type
+        self.a_param = cfg.dataset.a_param
+        self.padding_length = cfg.dataset.padding_length
 
     def __len__(self):
         return self.batches_per_epoch * self.batch_size
@@ -47,8 +49,8 @@ class ImpulseResponsePrediction(Dataset):
             self.snr_min,
             self.snr_max,
             self.jitter_regularization_parameter,
-            self.low_pass_cutoff,
-            self.low_pass_cutoff_order,
+            self.filter_type,
+            self.a_param,
         )
 
         # Splitting
@@ -62,7 +64,7 @@ class ImpulseResponsePrediction(Dataset):
         y = torch.cat([y_past, y_future], dim=0)
 
         padding_tensor = torch.full(
-            size=(self.g_length, 2),
+            size=(self.padding_length, 2),
             fill_value=self.padding,
             dtype=torch.float,
         )
@@ -72,4 +74,14 @@ class ImpulseResponsePrediction(Dataset):
 
         target = g
 
-        return input, target
+        # Build the mask
+
+        mask = torch.cat(
+            [
+                torch.zeros(u.shape[0], dtype=torch.bool),
+                torch.ones(self.padding_length, dtype=torch.bool),
+            ],
+            dim=0,
+        )
+
+        return input, target, generate_info(sample), mask

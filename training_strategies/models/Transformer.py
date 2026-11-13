@@ -1,3 +1,4 @@
+import torch
 from torch.optim import AdamW, Optimizer
 
 from utils.Metrics import collect_metrics
@@ -20,6 +21,7 @@ class Transformer:
         return AdamW(model.parameters(), lr=cfg.learning_rate)
 
     def clip_gradients(self, model):
+        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
         return None
 
     def before_step(self, model, global_step):

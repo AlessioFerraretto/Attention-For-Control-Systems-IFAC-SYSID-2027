@@ -2,43 +2,31 @@ from collections.abc import Callable
 
 import torch
 
+from models.MSE import MSE
+from utils.Globals import EPS
+
 
 class FuturePrediction:
+    def __init__(self, cfg):
+        self.requires_y_in_input = True
+
     def loss_fn(self) -> Callable:
-        # return torch.nn.CrossEntropyLoss()
-        return torch.nn.MSELoss()  # TODO: Check if this is correct
+        return MSE()
 
-    def compute_metrics(self, predictions, targets):
+    def compute_metrics(self, predictions, targets, info=None):
         """
-        Computes the Mean Squared Error (MSE) between predictions and targets.
-
-        Parameters:
-            predictions : torch.Tensor
-                Predicted values with shape (batch, seq_len, ...).
-            targets : torch.Tensor
-                Ground-truth values with shape compatible with `predictions`.
-
-        Returns:
-            dict: A dictionary containing the MSE score. Smaller values indicate
-            better performance.
+        Computes the FIT metric by projecting the predicted kernel parameters
+        into the impulse response space and comparing it with the true 'g'.
         """
-        # Cast to float to ensure accurate division and prevent issues
-        # if the inputs are integer types (like token indices)
         predictions = predictions.float()
         targets = targets.float()
+        norm_diff = torch.linalg.vector_norm(targets - predictions, dim=-1)
+        norm_true = torch.linalg.vector_norm(targets, dim=-1)
+        fit_per_sample = 100.0 * (1.0 - (norm_diff / (norm_true + EPS)))
+        return {"fit": torch.mean(fit_per_sample).item()}
 
-        # Calculate Mean Squared Error
-        mse = torch.mean((predictions - targets) ** 2)
-
-        relative_error = torch.abs(predictions - targets) / (torch.abs(targets) + 1e-8)
-        absolute_error = torch.abs(predictions - targets)
-        mae = torch.mean(absolute_error)
-        rmse = torch.sqrt(mse)
-        percentage_error = torch.mean(relative_error) * 100
-
-        return {
-            "mse": mse.item(),
-            "mae": mae.item(),
-            "rmse": rmse.item(),
-            "mape": percentage_error.item(),
-        }
+    def compute_y_hat(self, predictions, info, u, y_with_grad):
+        """Computes the estimated output y_hat using the predicted kernel parameters and the input u."""
+        B, n = y_with_grad.shape
+        y_hat = predictions[:, :n, -1] if predictions.dim() == 3 else predictions[:, :n]
+        return y_hat

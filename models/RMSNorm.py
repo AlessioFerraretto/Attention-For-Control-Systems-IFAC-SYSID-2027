@@ -2,6 +2,7 @@ import torch
 from torch import nn
 
 from monitor.TrackableModule import TrackableModule
+from utils.Globals import EPS
 
 
 class RMSNorm(TrackableModule):
@@ -11,16 +12,14 @@ class RMSNorm(TrackableModule):
     per-feature scale parameters.
 
     Attributes:
-      eps : float
         Small constant to avoid division by zero.
       weight : torch.nn.Parameter
         Learnable scale parameters with shape (d_model,).
     """
 
     # TODO: Remove default
-    def __init__(self, d_model: int, eps: float, device: torch.device):
+    def __init__(self, d_model: int, device: torch.device):
         super().__init__()
-        self.eps = eps
         self.weight = nn.Parameter(torch.ones(d_model, device=device))
 
     def forward(self, x):
@@ -33,8 +32,6 @@ class RMSNorm(TrackableModule):
         Returns:
           torch.Tensor: Normalized tensor of shape (batch_size, sequence_length, d_model).
         """
-        output = (
-            x * torch.rsqrt(x.pow(2).mean(-1, keepdim=True) + self.eps) * self.weight
-        )
+        output = x * torch.rsqrt(x.pow(2).mean(-1, keepdim=True) + EPS) * self.weight
 
         return output

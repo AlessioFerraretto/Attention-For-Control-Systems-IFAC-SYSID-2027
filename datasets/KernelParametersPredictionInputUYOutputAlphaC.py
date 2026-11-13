@@ -1,19 +1,15 @@
-"""
-Uses a fixed system (alpha, c) given.
-Fixes (g) using the given system (alpha, c).
-Dynamically generates u and y given the fixed (g)
-The generator output is of the form [[u],[y]] -> [alpha,c].
-"""
-
 import torch
 from torch.utils.data import Dataset
 
+from utils.DatasetUtils import generate_info
+from utils.SeedManager import SeedManager
 from utils.StableSplineGenerator import (
+    KERNELS,
     generate_stable_spline,
 )
 
 
-class KernelParametersPrediction(Dataset):
+class KernelParametersPredictionInputUYOutputAlphaC(Dataset):
     def __init__(self, cfg, batch_size):
         """Generates a static dataset of synthetic linear systems."""
         self.batch_size = batch_size  # TODO: Find a more elegant way
@@ -27,25 +23,32 @@ class KernelParametersPrediction(Dataset):
         self.c_max = cfg.dataset.c_max
         self.alpha_min = cfg.dataset.alpha_min
         self.alpha_max = cfg.dataset.alpha_max
+        self.eta_min = cfg.dataset.eta_min
+        self.eta_max = cfg.dataset.eta_max
         self.snr_min = cfg.dataset.snr_min
         self.snr_max = cfg.dataset.snr_max
         self.jitter_regularization_parameter = (
             cfg.dataset.jitter_regularization_parameter
         )
-        self.padding = cfg.dataset.padding
         self.input_dim = cfg.model.input_dim
-        self.low_pass_cutoff = cfg.dataset.low_pass_cutoff
-        self.low_pass_cutoff_order = cfg.dataset.low_pass_cutoff_order
+        self.filter_type = cfg.dataset.filter_type
+        self.a_param = cfg.dataset.a_param
+        self.kernel = cfg.dataset.kernel
 
     def __len__(self):
         return self.batches_per_epoch * self.batch_size
 
     def __getitem__(self, idx):
         # Generate (alpha, c) with which to generate (g) and the resulting (u, y) using the fixed system (c, alpha)
-        alpha = (self.alpha_max - self.alpha_min) * torch.rand(
+        alpha = (self.alpha_max - self.alpha_min) * SeedManager().dataset_rand(
             1
         ).item() + self.alpha_min
-        c = (self.c_max - self.c_min) * torch.rand(1).item() + self.c_min
+        c = (self.c_max - self.c_min) * SeedManager().dataset_rand(
+            1
+        ).item() + self.c_min
+        eta = (self.eta_max - self.eta_min) * SeedManager().dataset_rand(
+            1
+        ).item() + self.eta_min
 
         sample = generate_stable_spline(
             self.g_length,
@@ -53,11 +56,13 @@ class KernelParametersPrediction(Dataset):
             self.n_future,
             c,
             alpha,
+            eta,
             self.snr_min,
             self.snr_max,
             self.jitter_regularization_parameter,
-            self.low_pass_cutoff,
-            self.low_pass_cutoff_order,
+            self.filter_type,
+            self.a_param,
+            kernel=self.kernel,
         )
 
         # Splitting
@@ -65,20 +70,17 @@ class KernelParametersPrediction(Dataset):
         y_past = sample["y_past"]
         u_future = sample["u_future"]
         y_future = sample["y_future"]
-        g = sample["g"]
 
         u = torch.cat([u_past, u_future], dim=0)
         y = torch.cat([y_past, y_future], dim=0)
 
-        padding_tensor = torch.full(
-            size=(2, 2),
-            fill_value=self.padding,
+        input = torch.stack([u, y], dim=-1)
+
+        target = torch.tensor(
+            [alpha if self.kernel == "stable_spline" else eta, c],
             dtype=torch.float,
         )
 
-        uy = torch.stack([u, y], dim=-1)
-        input = torch.cat([uy, padding_tensor], dim=0)
+        K = KERNELS[self.kernel](self.g_length, alpha=alpha, eta=eta, c=c)
 
-        target = torch.tensor([alpha, c], dtype=torch.float)
-
-        return input, target
+        return input, target, generate_info(sample)

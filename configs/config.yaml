@@ -1,12 +1,19 @@
 project_name: "Attention for Control Systems"
 
 num_workers: 4
-seed: null
+# Separate seeds keep synthetic data and transformer initialization independent.
+transformer_seed: null
+data_seed: null
 debug_every: 10
+
+resume_checkpoint: null
+running_mode: "training"
+model_mode: "new"
+model_path: null
 
 defaults:
   - _self_
-  - experiment: future-prediction
+  - experiment: null
 
 hydra:
   run:

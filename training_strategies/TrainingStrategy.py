@@ -9,13 +9,11 @@ class TrainingStrategy:
     def loss_fn(self):
         return self.task.loss_fn()
 
-    def compute_metrics(self, preds, targets):
-        return self.task.compute_metrics(preds, targets)
+    def compute_metrics(self, preds, targets, info):
+        return self.task.compute_metrics(preds, targets, info)
 
     def extra_loss(self, model, cfg, global_step):
-        return self.model_comp.extra_loss(
-            model, cfg, global_step
-        )  # TODO: Check if this is correct
+        return self.model_comp.extra_loss(model, cfg, global_step)
 
     def setup(self, model, cfg, device, train_loader):
         return self.model_comp.setup(model, cfg, device, train_loader)
@@ -40,3 +38,6 @@ class TrainingStrategy:
 
     def logging_metrics(self, model):  # , precomputed):
         return self.model_comp.logging_metrics(model)  # , precomputed)
+
+    def compute_y_hat(self, predictions, info, u, y_with_grad):
+        return self.task.compute_y_hat(predictions, info, u, y_with_grad)
