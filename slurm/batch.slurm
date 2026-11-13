@@ -10,8 +10,8 @@
 
 #SBATCH --job-name AFCS_GridSearch
 #SBATCH --array=0-N
-#SBATCH --output outputs/batch/%A_%a_out.txt
-#SBATCH --error outputs/batch/%A_%a_err.txt
+#SBATCH --output outputs/batch/transformer/%A_%a_out.txt
+#SBATCH --error outputs/batch/transformer/%A_%a_err.txt
 #SBATCH --mail-type ALL
 
 # 1. Define the folder containing all generated configs

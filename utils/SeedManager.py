@@ -18,13 +18,13 @@ class SeedManager:
             cls._instance._dataset_torch_generator = torch.Generator()
             cls._instance._dataset_numpy_generator = np.random.default_rng()
 
-            # 1. Force PyTorch to use deterministic algorithms
+            # 1. Obbliga PyTorch a usare algoritmi deterministici
             torch.use_deterministic_algorithms(True)
 
-            # 2. Force cuBLAS to be deterministic
+            # 2. Obbliga cuBLAS a essere deterministico (richiesto da PyTorch >= 1.8)
             os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
 
-            # 3. Disable cuDNN heuristic search and force deterministic algorithms
+            # 3. Disabilita la ricerca euristica di cuDNN e forza algoritmi deterministici
             torch.backends.cudnn.benchmark = False
             torch.backends.cudnn.deterministic = True
 

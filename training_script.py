@@ -244,11 +244,6 @@ def training(
     for epoch in range(start_epoch, cfg.epochs + 1):
         log.info(f"Epoch {epoch: 3d} / {cfg.epochs}")
 
-        # Reset the seed at the start of each epoch to get the same dataset
-        SeedManager().seed_dataset(cfg.data_seed)
-        if train_loader.generator is not None:
-            train_loader.generator.manual_seed(cfg.data_seed)
-
         model.train(True)
         cumulative_loss = 0.0
         for i, (inputs, targets, info, *rest) in enumerate(train_loader, start=1):
