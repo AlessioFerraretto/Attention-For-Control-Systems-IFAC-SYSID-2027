@@ -2,8 +2,6 @@
 
 transformer_seed: 1
 data_seed: 1
-val_seed: "${add: ${data_seed}, 1 }"
-test_seed: "${add: ${data_seed}, 2 }"
 
 epochs: 50
 learning_rate: 1e-3
@@ -23,12 +21,12 @@ model:
   embedding: transformer-positional-encoding # Embedding type
   layer_name: transformer-encoder-layer # Name of the layer used
   out_layer: token-wise-readout # Output layer type
-  num_layers: 2
+  num_layers: 4
 
   # Layer parameters
   input_dim: 2
   model_dim: 64
-  num_heads: 16
+  num_heads: 32
   output_dim: ${model.model_dim}
   activation_function: gelu
   dropout: 0.1
